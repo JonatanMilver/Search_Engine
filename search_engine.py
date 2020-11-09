@@ -5,6 +5,13 @@ from indexer import Indexer
 from searcher import Searcher
 import utils
 
+from tqdm import tqdm
+
+one_file = "C:\\Users\\Guyza\\OneDrive\\Desktop\\Information_Systems\\University\\Third_year\\Semester_E\\" \
+           "Information_Retrieval\\Search_Engine_Project\\Data\\Data\\date=07-11-2020\\covid19_07-11.snappy.parquet"
+corpus_path = "C:\\Users\\Guyza\\OneDrive\\Desktop\\Information_Systems\\University\\Third_year\\Semester_E\\" \
+              "Information_Retrieval\\Search_Engine_Project\\Data\\Data\\"
+
 
 def run_engine():
     """
@@ -18,9 +25,12 @@ def run_engine():
     p = Parse()
     indexer = Indexer(config)
 
-    documents_list = r.read_file(file_name='sample3.parquet')
+    # documents_list = r.read_file(file_name='sample2.parquet')
+    documents_list = r.read_file(file_name=one_file)
+    # documents_list = r.read_folder(corpus_path)
+
     # Iterate over every document in the file
-    for idx, document in enumerate(documents_list):
+    for idx, document in tqdm(enumerate(documents_list)):
         # parse the document
         parsed_document = p.parse_doc(document)
         number_of_documents += 1
