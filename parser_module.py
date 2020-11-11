@@ -1,7 +1,15 @@
 import json
+from collections import Counter
+
+import nltk
+
+nltk.download('averaged_perceptron_tagger')
+nltk.download('maxent_ne_chunker')
+nltk.download('words')
 from nltk.stem import PorterStemmer
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
+from nltk import ne_chunk, pos_tag
 from document import Document
 import re
 import numpy as np
@@ -11,9 +19,10 @@ class Parse:
 
     def __init__(self):
         self.stop_words = stopwords.words('english')
-        self.stop_words.extend(['', ':', '-', '.'])  # should we add www, https?
+        self.stop_words.extend(['', ':'])  # should we add www, https?
 
         self.capital_letter_indexer = {}
+        self.named_entities = Counter()
 
     def parse_sentence(self, text):
         """
@@ -22,25 +31,29 @@ class Parse:
         :return:
         """
         text_tokens = word_tokenize(text)
+        text_tokens_without_stopwords = [w for w in text_tokens if w not in self.stop_words]
 
-        for idx, token in enumerate(text_tokens):
+        self.find_named_entities(text_tokens)
+
+        for idx, token in enumerate(text_tokens_without_stopwords):
             if token[0].isupper():
                 if token not in self.capital_letter_indexer.keys():
                     self.capital_letter_indexer[token.lower()] = True
             else:
                 self.capital_letter_indexer[token] = False
-            if token is '#':
-                self.handle_hashtags(text_tokens, idx)
-            elif token is '@':
-                self.handle_tags(text_tokens, idx)
-            elif token in ["%", "percent", "percentage"]:
-                self.handle_percent(text_tokens, idx)
-            elif token.isnumeric() or "," in token:
-                self.handle_number(text_tokens, idx, token)
-            # elif token == "https":
-            #     self.handle_url(text_tokens, idx)
 
-        text_tokens_without_stopwords = [w.lower() for w in text_tokens if w not in self.stop_words]
+            token = token.lower()
+            text_tokens_without_stopwords[idx] = token
+
+            if token == '#':
+                self.handle_hashtags(text_tokens_without_stopwords, idx)
+            elif token == '@':
+                self.handle_tags(text_tokens_without_stopwords, idx)
+            elif token in ["%", "percent", "percentage"]:
+                self.handle_percent(text_tokens_without_stopwords, idx)
+            elif token.isnumeric() or "," in token:
+                self.handle_number(text_tokens_without_stopwords, idx, token)
+
         return text_tokens_without_stopwords
 
     def parse_doc(self, doc_as_list):
@@ -72,7 +85,6 @@ class Parse:
 
         # tokenized_text = self.use_porter_stemmer(tokenized_text)
 
-
         self.handle_url(tokenized_text, url)
         # self.handle_url(tokenized_text, retweet_url)
         # self.handle_url(tokenized_text, quote_url)
@@ -99,8 +111,8 @@ class Parse:
         :return:
         """
         if len(text_tokens) > idx + 1:
-            text_tokens.extend(self.hashtag_split(text_tokens[idx + 1]))
-            text_tokens[idx] = text_tokens[idx] + text_tokens[idx + 1]
+            text_tokens.extend([x.lower() for x in self.hashtag_split(text_tokens[idx + 1])])
+            text_tokens[idx] = (text_tokens[idx] + text_tokens[idx + 1]).lower()
             text_tokens.pop(idx + 1)
 
     def handle_tags(self, text_tokens, idx):
@@ -111,7 +123,7 @@ class Parse:
         """
 
         if len(text_tokens) > idx + 1:
-            text_tokens[idx] = text_tokens[idx] + text_tokens[idx + 1]
+            text_tokens[idx] = (text_tokens[idx] + text_tokens[idx + 1]).lower()
             text_tokens.pop(idx + 1)
 
     def hashtag_split(self, tag):
@@ -134,7 +146,7 @@ class Parse:
             # if text_tokens[idx - 1].isnumeric():  # what if it is some kind of range?
             number = self.convert_string_to_float(text_tokens[idx - 1])
             if number is not None:  # what if it is some kind of range?
-                text_tokens[idx] = text_tokens[idx - 1] + "%"
+                text_tokens[idx] = text_tokens[idx - 1].lower() + "%"
                 text_tokens.pop(idx - 1)
 
     def handle_number(self, text_tokens, idx, token):
@@ -240,10 +252,14 @@ class Parse:
         :param url_dict: dictionary containing URL strings as values
         :return:
         """
-        if url_dict is None:
-            return
-        for v in url_dict.values():
-            to_extend.extend(self.split_url(v))
+        try:
+            if url_dict is None:
+                return
+            for v in url_dict.values():
+                if v is not None:
+                    to_extend.extend(self.split_url(v))
+        except:
+            print(url_dict)
 
     def json_convert_string_to_object(self, s):
         """
@@ -267,24 +283,23 @@ class Parse:
             return text
         indices.sort(key=lambda x: x[0], reverse=True)
         for indexes in indices:
-            print(text[indexes[0]:indexes[0]+5])
-            if text[indexes[0]:indexes[0]+5] == "https":
+            if text[indexes[0]:indexes[0] + 5] == "https":
                 text = text[:indexes[0]] + text[indexes[1]:]
 
         return text
 
-    def use_porter_stemmer(self, list_str):
-        """
-        stemms each word in list_str
-        :param list_str: list of strings
-        :return: stemmed list of words
-        """
-        ps = PorterStemmer()
-        stemmed_list = []
-        for w in list_str:
-            stemmed_list.append(ps.stem(w))
-
-        return stemmed_list
+    # def use_porter_stemmer(self, list_str):
+    #     """
+    #     stemms each word in list_str
+    #     :param list_str: list of strings
+    #     :return: stemmed list of words
+    #     """
+    #     ps = PorterStemmer()
+    #     stemmed_list = []
+    #     for w in list_str:
+    #         stemmed_list.append(ps.stem(w))
+    #
+    #     return stemmed_list
 
     def Find(self, string):
         # findall() has been used
@@ -292,4 +307,28 @@ class Parse:
         regex = r"(?i)\b((?:https?://|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))\)|[^\s`!()\[\]{};:'\".,<>?«»“”‘’]))"
         url = re.findall(regex, string)
         return [x[0] for x in url]
+
+    def find_named_entities(self, text_tokens):
+
+        tagged = nltk.pos_tag(text_tokens)
+        ne = nltk.ne_chunk(tagged, binary=True)
+        words = set()
+
+        for s in ne:
+            if isinstance(s, nltk.Tree):
+                word = ""
+                for i in range(len(s.leaves())):
+                    if i == len(s.leaves()) - 1:
+                        word += s[i][0]
+                    else:
+                        word += s[i][0] + " "
+
+                word = word.lower()
+                words.add(word)
+
+        for w in words:
+            self.named_entities[w] += 1
+
+
+        # print(words)
 
