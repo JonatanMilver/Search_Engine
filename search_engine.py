@@ -36,6 +36,9 @@ def run_engine():
         number_of_documents += 1
         # index the document data
         indexer.add_new_doc(parsed_document)
+
+    # convert_words(p, indexer)
+
     print('Finished parsing and indexing. Starting to export files')
 
     utils.save_obj(indexer.inverted_idx, "inverted_idx")
@@ -64,3 +67,13 @@ def main():
     inverted_index = load_index()
     for doc_tuple in search_and_rank_query(query, inverted_index, k):
         print('tweet id: {}, score (unique common words with query): {}'.format(doc_tuple[0], doc_tuple[1]))
+
+
+def convert_words(p, indexer):
+    parser_dict = p.capital_letter_indexer
+    indexer_dict = indexer.inverted_idx  # maybe not on inverted???
+    for k, v in parser_dict.items():
+        if v:
+            val = indexer_dict[k]
+            del indexer_dict[k]
+            indexer_dict[k.upper()] = val

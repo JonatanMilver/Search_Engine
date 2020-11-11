@@ -19,8 +19,6 @@ class ReadFile:
         full_path = os.path.join(self.corpus_path, file_name)
         df = pd.read_parquet(full_path, engine="pyarrow")
 
-        # self.add_cols_to_dataframe(df)
-        # self.convert_urls_to_dicts(df)
         return df.values.tolist()
 
     def read_folder(self, folder_path):
@@ -32,17 +30,20 @@ class ReadFile:
         all_docs = []
 
         for dir, subdirs, files in os.walk(folder_path):  # folder_path should be changed to self.corpus_path
-            # for file in files:
-            #     if ".parquet" in file:
-            #     if file.endswith(".parquet"):
-            #             all_docs.extend(self.read_file(dir + "\\" + file))
+            if subdirs:
+                for subdir in tqdm(subdirs):
+                    for d, dirs, subfiles in os.walk(dir + subdir):
+                        for file in subfiles:
+                            if file.endswith(".parquet"):
+                                # print(dir + subdir + "\\" + file)
+                                # all_docs.extend(self.read_file(dir + subdir + "\\" + file))
+                                all_docs.extend(self.read_file(os.path.join(subdir,file)))
+                break
 
-            for subdir in subdirs:  # should run directly on files
-                print(dir + subdir)
-                for d, dirs, subfiles in os.walk(dir + subdir):
-                    for file in subfiles:
-                        if ".parquet" in file:
-                            all_docs.extend(self.read_file(dir + subdir + "\\" + file))
+            else:
+                for file in files:
+                    if file.endswith(".parquet"):
+                            all_docs.extend(self.read_file(dir + "\\" + file))
 
         return all_docs
 
