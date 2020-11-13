@@ -3,16 +3,11 @@ from collections import Counter
 
 import nltk
 
-nltk.download('averaged_perceptron_tagger')
-nltk.download('maxent_ne_chunker')
-nltk.download('words')
-from nltk.stem import PorterStemmer
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk import ne_chunk, pos_tag
 from document import Document
 import re
-import numpy as np
 
 
 class Parse:
@@ -20,7 +15,7 @@ class Parse:
     def __init__(self):
         self.stop_words = stopwords.words('english')
         self.stop_words.extend(['', ':'])  # should we add www, https?
-
+        # self.tweet_tokenizer = TweetTokenizer()
         self.capital_letter_indexer = {}
         self.named_entities = Counter()
 
@@ -31,12 +26,14 @@ class Parse:
         :return:
         """
         text_tokens = word_tokenize(text)
+        # text_tokens = self.tweet_tokenizer.tokenize(text)
+
         text_tokens_without_stopwords = [w for w in text_tokens if w not in self.stop_words]
 
-        self.find_named_entities(text_tokens)
-
+        # '–' , '-'
         for idx, token in enumerate(text_tokens_without_stopwords):
-            if token[0].isupper():
+            # self.named_entities[token] += 1
+            if len(token) > 0 and token[0].isupper():
                 if token not in self.capital_letter_indexer.keys():
                     self.capital_letter_indexer[token.lower()] = True
             else:
@@ -53,7 +50,10 @@ class Parse:
                 self.handle_percent(text_tokens_without_stopwords, idx)
             elif token.isnumeric() or "," in token:
                 self.handle_number(text_tokens_without_stopwords, idx, token)
-
+            elif '-' in token and len(token) > 1:
+                self.handle_dashes(text_tokens_without_stopwords, token)
+        self.find_named_entities(text_tokens_without_stopwords)
+        # text_tokens_without_stopwords = [w for w in text_tokens if w not in self.stop_words]
         return text_tokens_without_stopwords
 
     def parse_doc(self, doc_as_list):
@@ -82,8 +82,10 @@ class Parse:
         full_text = self.clean_text(full_text, url_indices)
 
         tokenized_text = self.parse_sentence(full_text)
+        if quote_text is not None:
+            # Parse the quoted text as well and add it to the tokenized list.
+            tokenized_text.extend(self.parse_sentence(quote_text))
 
-        # tokenized_text = self.use_porter_stemmer(tokenized_text)
 
         self.handle_url(tokenized_text, url)
         # self.handle_url(tokenized_text, retweet_url)
@@ -301,17 +303,17 @@ class Parse:
     #
     #     return stemmed_list
 
-    def Find(self, string):
-        # findall() has been used
-        # with valid conditions for urls in string
-        regex = r"(?i)\b((?:https?://|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))\)|[^\s`!()\[\]{};:'\".,<>?«»“”‘’]))"
-        url = re.findall(regex, string)
-        return [x[0] for x in url]
+    # def Find(self, string):
+    #     # findall() has been used
+    #     # with valid conditions for urls in string
+    #     regex = r"(?i)\b((?:https?://|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))\)|[^\s`!()\[\]{};:'\".,<>?«»“”‘’]))"
+    #     url = re.findall(regex, string)
+    #     return [x[0] for x in url]
 
     def find_named_entities(self, text_tokens):
 
         tagged = nltk.pos_tag(text_tokens)
-        ne = nltk.ne_chunk(tagged, binary=True)
+        ne = nltk.ne_chunk(tagged)
         words = set()
 
         for s in ne:
@@ -325,10 +327,20 @@ class Parse:
 
                 word = word.lower()
                 words.add(word)
+            else:
+                if s[1] in ['NNS', 'NNP', 'NNPS']:
+                    words.add(s[0])
 
         for w in words:
             self.named_entities[w] += 1
 
-
-        # print(words)
-
+    def handle_dashes(self, text_tokens_without_stopwords, token):
+        """
+        Adds token's words separated to the tokenized list.
+        e.g: Word-word will be handled as [Word,word, Word-word]
+        :param text_tokens_without_stopwords: List of tokens, tokens will be added to this list
+        :param token: String to separate
+        :return: None
+        """
+        text_tokens_without_stopwords.append(token[:token.find('-')])
+        text_tokens_without_stopwords.append(token[token.find('-') + 1:])
