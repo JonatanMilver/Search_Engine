@@ -1,7 +1,10 @@
 class Indexer:
 
     def __init__(self, config):
+        # given a term, returns the number of doc/tweets in which he is in
         self.inverted_idx = {}
+
+        # postingDict[term] = [(d1.tweet_id, d1.number_of_appearances_in_doc), (d2.tweet_id, d2.number_of_appearances_in_doc), ...]
         self.postingDict = {}
         self.config = config
 

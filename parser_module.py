@@ -1,10 +1,9 @@
 import json
 from collections import Counter
-
 import nltk
 
 from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
+from nltk.tokenize import word_tokenize, TweetTokenizer
 from nltk import ne_chunk, pos_tag
 from document import Document
 import re
@@ -14,8 +13,8 @@ class Parse:
 
     def __init__(self):
         self.stop_words = stopwords.words('english')
-        self.stop_words.extend(['', ':'])  # should we add www, https?
-        # self.tweet_tokenizer = TweetTokenizer()
+        self.stop_words.extend(['', ':', '.'])  # should we add www, https?
+
         self.capital_letter_indexer = {}
         self.named_entities = Counter()
 
@@ -26,8 +25,6 @@ class Parse:
         :return:
         """
         text_tokens = word_tokenize(text)
-        # text_tokens = self.tweet_tokenizer.tokenize(text)
-
         text_tokens_without_stopwords = [w for w in text_tokens if w not in self.stop_words]
 
         # '–' , '-'
@@ -42,7 +39,7 @@ class Parse:
             token = token.lower()
             text_tokens_without_stopwords[idx] = token
 
-            if token == '#':
+            if token.startswith('#'):
                 self.handle_hashtags(text_tokens_without_stopwords, idx)
             elif token == '@':
                 self.handle_tags(text_tokens_without_stopwords, idx)
@@ -77,9 +74,18 @@ class Parse:
         retweet_quoted_url = self.json_convert_string_to_object(doc_as_list[12])
         retweet_quoted_indices = self.json_convert_string_to_object(doc_as_list[13])
 
-        term_dict = {}
+        dict_list = [url, retweet_url, quote_url, retweet_quoted_url]
+        # holds all URLs in one place
+        urls_set = set()
+        for d in dict_list:
+            if d is not None:
+                for key in d.keys():
+                    urls_set.add(d[key])
 
-        full_text = self.clean_text(full_text, url_indices)
+        # removes redundant short URLs from full_text
+        full_text = self.clean_text_from_urls(full_text)
+        # should we do for quoted and retweet texts as well?
+
 
         tokenized_text = self.parse_sentence(full_text)
         if quote_text is not None:
@@ -87,11 +93,9 @@ class Parse:
             tokenized_text.extend(self.parse_sentence(quote_text))
 
 
-        self.handle_url(tokenized_text, url)
-        # self.handle_url(tokenized_text, retweet_url)
-        # self.handle_url(tokenized_text, quote_url)
-        # self.handle_url(tokenized_text, retweet_quoted_url)
+        self.expand_tokenized_with_url_set(tokenized_text, urls_set)
 
+        term_dict = {}
         doc_length = len(tokenized_text)  # after text operations.
 
         for term in tokenized_text:
@@ -247,21 +251,31 @@ class Parse:
         r = re.split('[/://?=]', url)
         return [x for x in r if x != '']
 
-    def handle_url(self, to_extend, url_dict):
+    def expand_tokenized_with_url_set(self, to_extend, urls_set):
         """
-        extends the to_extend list with the components of the values in url_dict
-        :param to_extend: list to extend
-        :param url_dict: dictionary containing URL strings as values
+        extends the to_extend list with the parsed values in url_set
+        :param to_extend: list of strings to extend
+        :param urls_set: a Set containing URL strings
         :return:
         """
-        try:
-            if url_dict is None:
-                return
-            for v in url_dict.values():
-                if v is not None:
-                    to_extend.extend(self.split_url(v))
-        except:
-            print(url_dict)
+        for url in urls_set:
+            to_extend.extend(self.split_url(url))
+
+    # def expand_tokenized_with_url_dict(self, to_extend, url_dict):
+    #     """
+    #     extends the to_extend list with the components of the values in url_dict
+    #     :param to_extend: list to extend
+    #     :param url_dict: dictionary containing URL strings as values
+    #     :return:
+    #     """
+    #     try:
+    #         if url_dict is None:
+    #             return
+    #         for v in url_dict.values():
+    #             if v is not None:
+    #                 to_extend.extend(self.split_url(v))
+    #     except:
+    #         print(url_dict)
 
     def json_convert_string_to_object(self, s):
         """
@@ -274,19 +288,39 @@ class Parse:
         else:
             return json.loads(s)
 
-    def clean_text(self, text, indices):
+    # def clean_text(self, text, indices1, indices2, indices3, indices4):
+    #     """
+    #     for each indices[i], removes all characters in text between indices[i][0] to indices[i][1]
+    #     :param text: string to clean
+    #     :param indices: list of lists,each sub-list contains starting index and end index at indices[i][0],indices[i][1]
+    #     :return: string text
+    #     """
+    #     indices = []
+    #     if indices1 is not None:
+    #         indices.extend(indices1)
+    #     if indices2 is not None:
+    #         indices.extend(indices2)
+    #     if indices3 is not None:
+    #         indices.extend(indices3)
+    #     if indices4 is not None:
+    #         indices.extend(indices4)
+    #     if indices is None and indices != []:
+    #         return text
+    #     indices.sort(key=lambda x: x[0], reverse=True)
+    #     for indexes in indices:
+    #         if text[indexes[0]:indexes[0] + 5] == "https":
+    #             text = text[:indexes[0]] + text[indexes[1]:]
+    #
+    #     return text
+
+    def clean_text_from_urls(self, text):
         """
-        for each indices[i], removes all characters in text between indices[i][0] to indices[i][1]
-        :param text: string to clean
-        :param indices: list of lists,each sub-list contains starting index and end index at indices[i][0],indices[i][1]
-        :return: string text
+        removes all URLs from text
+        :param text: string
+        :return:
         """
-        if indices is None:
-            return text
-        indices.sort(key=lambda x: x[0], reverse=True)
-        for indexes in indices:
-            if text[indexes[0]:indexes[0] + 5] == "https":
-                text = text[:indexes[0]] + text[indexes[1]:]
+        text = re.sub(r'http\S+', '', text)
+        # urls = re.findall('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', full_text)
 
         return text
 
@@ -324,6 +358,7 @@ class Parse:
                         word += s[i][0]
                     else:
                         word += s[i][0] + " "
+                # else:
 
                 word = word.lower()
                 words.add(word)
@@ -334,6 +369,7 @@ class Parse:
         for w in words:
             self.named_entities[w] += 1
 
+            
     def handle_dashes(self, text_tokens_without_stopwords, token):
         """
         Adds token's words separated to the tokenized list.
@@ -344,3 +380,4 @@ class Parse:
         """
         text_tokens_without_stopwords.append(token[:token.find('-')])
         text_tokens_without_stopwords.append(token[token.find('-') + 1:])
+
