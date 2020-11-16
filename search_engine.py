@@ -1,16 +1,19 @@
+import nltk
+
 from reader import ReadFile
 from configuration import ConfigClass
 from parser_module import Parse
 from indexer import Indexer
 from searcher import Searcher
 import utils
+from nltk import ne_chunk, pos_tag
+from concurrent.futures import ThreadPoolExecutor
+from multiprocessing import Pool
 
 from tqdm import tqdm
 
-one_file = "C:\\Users\\Guyza\\OneDrive\\Desktop\\Information_Systems\\University\\Third_year\\Semester_E\\" \
-           "Information_Retrieval\\Search_Engine_Project\\Data\\Data\\date=07-11-2020\\covid19_07-11.snappy.parquet"
-corpus_path = "C:\\Users\\Guyza\\OneDrive\\Desktop\\Information_Systems\\University\\Third_year\\Semester_E\\" \
-              "Information_Retrieval\\Search_Engine_Project\\Data\\Data\\"
+one_file = "C:\\Users\\yonym\\Desktop\\ThirdYear\\IR\\engineV1\\Data\\date=07-11-2020\\covid19_07-11.snappy.parquet"
+corpus_path = "C:\\Users\\yonym\\Desktop\\ThirdYear\\IR\\engineV1\\Data\\"
 
 
 def run_engine():
@@ -36,7 +39,12 @@ def run_engine():
         number_of_documents += 1
         # index the document data
         indexer.add_new_doc(parsed_document)
-
+    # po = Pool(5)
+    # parsed_docs = po.map(p.parse_doc, documents_list)
+    # list_check = list(p.named_entities.keys())
+    # tagged = nltk.pos_tag(list_check)
+    # ne = nltk.ne_chunk(tagged, binary=True)
+    print()
     # convert_words(p, indexer)
 
     print('Finished parsing and indexing. Starting to export files')

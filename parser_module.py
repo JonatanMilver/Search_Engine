@@ -1,10 +1,8 @@
 import json
 from collections import Counter
-import nltk
-
+from fractions import Fraction
 from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize, TweetTokenizer
-from nltk import ne_chunk, pos_tag
+from nltk.tokenize import word_tokenize
 from document import Document
 import re
 
@@ -13,10 +11,11 @@ class Parse:
 
     def __init__(self):
         self.stop_words = stopwords.words('english')
-        self.stop_words.extend(['', ':', '.'])  # should we add www, https?
-
+        self.stop_words.extend(['', ':', '.', '(', ')', '[', ']', '{', '}'])
+        # self.nlp = spacy.load('en_core_web_sm', disable=["parser", "tagger"])
         self.capital_letter_indexer = {}
         self.named_entities = Counter()
+        self.tagging_types = ['PERSON', 'FAC', 'ORG', 'GPE', 'LOC', 'PRODUCT', 'EVENT', 'WORK_OF_ART', 'LANGUAGE', 'LAW', 'NORP']
 
     def parse_sentence(self, text):
         """
@@ -25,32 +24,56 @@ class Parse:
         :return:
         """
         text_tokens = word_tokenize(text)
-        text_tokens_without_stopwords = [w for w in text_tokens if w not in self.stop_words]
+        text_tokens_without_stopwords = [w for w in text_tokens if w.lower() not in self.stop_words]
+        # ne_doc = self.nlp(text)
 
+        ne_words = set()
+        entity_chunk = ''
         # '–' , '-'
         for idx, token in enumerate(text_tokens_without_stopwords):
-            # self.named_entities[token] += 1
+
             if len(token) > 0 and token[0].isupper():
+                # chunks entities together.
+                entity_chunk += token + " "
                 if token not in self.capital_letter_indexer.keys():
                     self.capital_letter_indexer[token.lower()] = True
             else:
                 self.capital_letter_indexer[token] = False
+                # add entity to the global counter and to the current words set
+                if entity_chunk != '':
+                    self.named_entities[entity_chunk] += 1
+                    ne_words.add(entity_chunk)
+                    entity_chunk = ''
 
             token = token.lower()
             text_tokens_without_stopwords[idx] = token
-
-            if token.startswith('#'):
+            if len(token) == 1 and ord(token) > 126:
+                text_tokens_without_stopwords.pop(idx)
+            elif len(token) > 1:
+                for char in token:
+                    if ord(char) > 126:
+                        token = token.replace(char, '')
+                text_tokens_without_stopwords[idx] = token
+            elif token.startswith('#'):
                 self.handle_hashtags(text_tokens_without_stopwords, idx)
             elif token == '@':
                 self.handle_tags(text_tokens_without_stopwords, idx)
+            elif re.match('/[1-9][0-9]*\/[1-9][0-9]*/g', token):
+                self.handle_fraction(text_tokens_without_stopwords, token, idx)
             elif token in ["%", "percent", "percentage"]:
                 self.handle_percent(text_tokens_without_stopwords, idx)
-            elif token.isnumeric() or "," in token:
+            elif token.isnumeric() or "," in token or '/' in token:
                 self.handle_number(text_tokens_without_stopwords, idx, token)
             elif '-' in token and len(token) > 1:
                 self.handle_dashes(text_tokens_without_stopwords, token)
-        self.find_named_entities(text_tokens_without_stopwords)
-        # text_tokens_without_stopwords = [w for w in text_tokens if w not in self.stop_words]
+        # self.find_named_entities(text_tokens)
+
+        # appends named entities to the tokenized list
+        for word in ne_words:
+            if word not in text_tokens_without_stopwords:
+                text_tokens_without_stopwords.append(word)
+        # self.find_named_entities_1(ne_doc, text_tokens_without_stopwords)
+        text_tokens_without_stopwords = [w for w in text_tokens_without_stopwords if w not in self.stop_words]
         return text_tokens_without_stopwords
 
     def parse_doc(self, doc_as_list):
@@ -80,18 +103,19 @@ class Parse:
         for d in dict_list:
             if d is not None:
                 for key in d.keys():
-                    urls_set.add(d[key])
+                    if key is not None and d[key] is not None:
+                        urls_set.add(d[key])
 
         # removes redundant short URLs from full_text
         full_text = self.clean_text_from_urls(full_text)
         # should we do for quoted and retweet texts as well?
-
+        if quote_text is not None:
+            quote_text = self.clean_text_from_urls(quote_text)
 
         tokenized_text = self.parse_sentence(full_text)
         if quote_text is not None:
             # Parse the quoted text as well and add it to the tokenized list.
             tokenized_text.extend(self.parse_sentence(quote_text))
-
 
         self.expand_tokenized_with_url_set(tokenized_text, urls_set)
 
@@ -108,29 +132,29 @@ class Parse:
                             quote_url, term_dict, doc_length)
         return document
 
-    def handle_hashtags(self, text_tokens, idx):
+    def handle_hashtags(self, text, idx):
         """
         merges text_tokens[idx] with text_tokens[idx+1] such that '#','exampleText' becomes '#exampleText'
         and inserts 'example' and 'Text' to text_tokens
-        :param text_tokens: list of all tokens
+        :param text: list of all tokens
         :param idx: index of # in text_tokens
         :return:
         """
-        if len(text_tokens) > idx + 1:
-            text_tokens.extend([x.lower() for x in self.hashtag_split(text_tokens[idx + 1])])
-            text_tokens[idx] = (text_tokens[idx] + text_tokens[idx + 1]).lower()
-            text_tokens.pop(idx + 1)
+        if len(text) > idx + 1:
+            text.extend([x.lower() for x in self.hashtag_split(text[idx + 1])])
+            text[idx] = (text[idx] + text[idx + 1]).lower()
+            text.pop(idx + 1)
 
-    def handle_tags(self, text_tokens, idx):
+    def handle_tags(self, text, idx):
         """
         merges text_tokens[idx] with text_tokens[idx+1] such that '@','example' becomes '@example'
-        :param text_tokens: list of tokenized words
+        :param text: list of tokenized words
         :param idx: index of @ in text_tokens
         """
 
-        if len(text_tokens) > idx + 1:
-            text_tokens[idx] = (text_tokens[idx] + text_tokens[idx + 1]).lower()
-            text_tokens.pop(idx + 1)
+        if len(text) > idx + 1:
+            text[idx] = (text[idx] + text[idx + 1]).lower()
+            text.pop(idx + 1)
 
     def hashtag_split(self, tag):
         """
@@ -140,29 +164,32 @@ class Parse:
         """
         return re.findall(r'[a-zA-Z0-9](?:[a-z0-9]+|[A-Z0-9]*(?=[A-Z]|$))', tag)
 
-    def handle_percent(self, text_tokens, idx):
+    def handle_percent(self, text, idx):
         """
         merges text_tokens[idx] with text_tokens[idx-1] such that "%"/"percent"/"percentage",'50' becomes '50%'
-        :param text_tokens: list of tokenized words
+        :param text: list of tokenized words
         :param idx: index of % in text_tokens
         :return:
         """
 
         if idx is not 0:
             # if text_tokens[idx - 1].isnumeric():  # what if it is some kind of range?
-            number = self.convert_string_to_float(text_tokens[idx - 1])
+            if re.match('/[1-9][0-9]*\/[1-9][0-9]*/g', text[idx - 1]):
+                number = text[idx - 1]
+            else:
+                number = self.convert_string_to_float(text[idx - 1])
             if number is not None:  # what if it is some kind of range?
-                text_tokens[idx] = text_tokens[idx - 1].lower() + "%"
-                text_tokens.pop(idx - 1)
+                text[idx] = text[idx - 1].lower() + "%"
+                text.pop(idx - 1)
 
-    def handle_number(self, text_tokens, idx, token):
+    def handle_number(self, text, idx, token):
         """
         converts all numbers to single format:
         2 -> 2
         68,800 -> 68.8K
         123,456,678 -> 123.456M
         3.5 Billion -> 3.5B
-        :param text_tokens: list of tokenized words
+        :param text: list of tokenized words
         :param idx: index of % in text_tokens
         :param token: text_tokens[idx]
         :return:
@@ -179,18 +206,18 @@ class Parse:
         # number = float(token)
         multiplier = 1
 
-        if len(text_tokens) > idx + 1:
-            if text_tokens[idx + 1] in ["%", "percent", "percentage"]:
+        if len(text) > idx + 1:
+            if text[idx + 1] in ["%", "percent", "percentage"]:
                 return
 
-            if text_tokens[idx + 1].lower() in ["thousand", "million", "billion"]:
-                if text_tokens[idx + 1].lower() == "thousand":
+            if text[idx + 1].lower() in ["thousand", "million", "billion"]:
+                if text[idx + 1].lower() == "thousand":
                     multiplier = 1000
-                elif text_tokens[idx + 1].lower() == "million":
+                elif text[idx + 1].lower() == "million":
                     multiplier = 1000000
-                elif text_tokens[idx + 1].lower() == "billion":
+                elif text[idx + 1].lower() == "billion":
                     multiplier = 1000000000
-                text_tokens.pop(idx + 1)
+                text.pop(idx + 1)
 
         number = number * multiplier
         kmb = ""
@@ -221,7 +248,7 @@ class Parse:
         else:
             number = str(number)
 
-        text_tokens[idx] = number + kmb
+        text[idx] = number + kmb
 
     def convert_string_to_float(self, s):
         """
@@ -232,12 +259,13 @@ class Parse:
         :return: float / None
         """
         if "," in s:
-            s.replace(",", "")
+            s = s.replace(",", "")
         try:
             number = float(s)
             return number
         except:
             return None
+
 
     def split_url(self, url):
         """
@@ -248,8 +276,9 @@ class Parse:
         :param url: url as string
         :return: list of sub strings
         """
-        r = re.split('[/://?=]', url)
-        return [x for x in r if x != '']
+        if url is not None:
+            r = re.split('[/://?=]', url)
+            return [x for x in r if x != '']
 
     def expand_tokenized_with_url_set(self, to_extend, urls_set):
         """
@@ -344,40 +373,72 @@ class Parse:
     #     url = re.findall(regex, string)
     #     return [x[0] for x in url]
 
-    def find_named_entities(self, text_tokens):
+    def find_named_entities(self, text):
 
-        tagged = nltk.pos_tag(text_tokens)
-        ne = nltk.ne_chunk(tagged)
+        # tagged = nltk.pos_tag(text)
+        # ne = nltk.ne_chunk(tagged)
         words = set()
-
-        for s in ne:
-            if isinstance(s, nltk.Tree):
-                word = ""
-                for i in range(len(s.leaves())):
-                    if i == len(s.leaves()) - 1:
-                        word += s[i][0]
-                    else:
-                        word += s[i][0] + " "
-                # else:
-
-                word = word.lower()
-                words.add(word)
+        chunk = ''
+        for token in text:
+            if token[0].isupper():
+                chunk += token + " "
             else:
-                if s[1] in ['NNS', 'NNP', 'NNPS']:
-                    words.add(s[0])
+                if chunk != '' and chunk not in self.stop_words:
+                    self.named_entities[chunk] += 1
+                    words.add(chunk)
+                    chunk = ''
+        for word in words:
+            if word not in text:
+                text.append(word)
+        # for s in ne:
+        #     if isinstance(s, nltk.Tree):
+        #         word = ""
+        #         for i in range(len(s.leaves())):
+        #             if i == len(s.leaves()) - 1:
+        #                 word += s[i][0]
+        #             else:
+        #                 word += s[i][0] + " "
+        #         # else:
+        #
+        #         word = word.lower()
+        #         words.add(word)
+        #     else:
+        #         if s[1] in ['NNS', 'NNP', 'NNPS']:
+        #             words.add(s[0])
+        #
+        # for w in words:
+        #     self.named_entities[w] += 1
 
-        for w in words:
-            self.named_entities[w] += 1
+    def find_named_entities_1(self, ne_doc, text):
+        for ent in ne_doc.ents:
+            if ent.label_ in self.tagging_types:
+                self.named_entities[ent.text] += 1
+                # should check if it's inefficient
+                if ent.text.lower() not in text:
+                    text.append(ent.text)
 
             
-    def handle_dashes(self, text_tokens_without_stopwords, token):
+    def handle_dashes(self, text, token):
         """
         Adds token's words separated to the tokenized list.
         e.g: Word-word will be handled as [Word,word, Word-word]
-        :param text_tokens_without_stopwords: List of tokens, tokens will be added to this list
+        :param text: List of tokens, tokens will be added to this list
         :param token: String to separate
         :return: None
         """
-        text_tokens_without_stopwords.append(token[:token.find('-')])
-        text_tokens_without_stopwords.append(token[token.find('-') + 1:])
+        text.append(token[:token.find('-')])
+        text.append(token[token.find('-') + 1:])
+
+    def handle_fraction(self, text, token, idx):
+        frac = str(Fraction(token))
+        if idx == 0 and frac != token:
+            text.append(frac)
+        else:
+            number = self.convert_string_to_float(text[idx - 1])
+            if number is not None:
+                text[idx - 1] = text[idx - 1] + " " + token
+                text.pop(idx)
+            elif token != frac:
+                text.append(frac)
+
 
