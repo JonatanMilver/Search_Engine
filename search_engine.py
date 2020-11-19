@@ -29,22 +29,17 @@ def run_engine():
     indexer = Indexer(config)
 
     # documents_list = r.read_file(file_name='sample2.parquet')
-    documents_list = r.read_file(file_name=one_file)
-    # documents_list = r.read_folder(corpus_path)
-
-    # Iterate over every document in the file
-    for idx, document in tqdm(enumerate(documents_list)):
-        # parse the document
-        parsed_document = p.parse_doc(document)
-        number_of_documents += 1
-        # index the document data
-        indexer.add_new_doc(parsed_document)
-    # po = Pool(5)
-    # parsed_docs = po.map(p.parse_doc, documents_list)
-    # list_check = list(p.named_entities.keys())
-    # tagged = nltk.pos_tag(list_check)
-    # ne = nltk.ne_chunk(tagged, binary=True)
-    print()
+    # documents_list = r.read_file(file_name=one_file)
+    parquet_documents_list = r.read_folder(corpus_path)
+    for parquet_file in parquet_documents_list:
+        documents_list = r.read_file(file_name=parquet_file)
+        # Iterate over every document in the file
+        for idx, document in tqdm(enumerate(documents_list)):
+            # parse the document
+            parsed_document = p.parse_doc(document)
+            number_of_documents += 1
+            # index the document data
+            indexer.add_new_doc(parsed_document)
     # convert_words(p, indexer)
 
     print('Finished parsing and indexing. Starting to export files')
@@ -67,7 +62,7 @@ def search_and_rank_query(query, inverted_index, k):
     ranked_docs = searcher.ranker.rank_relevant_doc(relevant_docs)
     return searcher.ranker.retrieve_top_k(ranked_docs, k)
 
-
+# def main(corpus_path,output_path,stemming,queries,num_docs_to_retrieve):
 def main():
     run_engine()
     query = input("Please enter a query: ")
