@@ -11,11 +11,9 @@ class Parse:
 
     def __init__(self):
         self.stop_words = stopwords.words('english')
-        self.stop_words.extend(['', ':', '.', '(', ')', '[', ']', '{', '}'])
-        # self.nlp = spacy.load('en_core_web_sm', disable=["parser", "tagger"])
+        self.stop_words.extend(['', ':', '.', ',', '(', ')', '[', ']', '{', '}', '', '``', 'rt'])
         self.capital_letter_indexer = {}
         self.named_entities = Counter()
-        self.tagging_types = ['PERSON', 'FAC', 'ORG', 'GPE', 'LOC', 'PRODUCT', 'EVENT', 'WORK_OF_ART', 'LANGUAGE', 'LAW', 'NORP']
 
     def parse_sentence(self, text):
         """
@@ -25,16 +23,17 @@ class Parse:
         """
         text_tokens = word_tokenize(text)
         text_tokens_without_stopwords = [w for w in text_tokens if w.lower() not in self.stop_words]
-        # ne_doc = self.nlp(text)
 
         ne_words = set()
         entity_chunk = ''
+        empty_chunk = 0
         # '–' , '-'
         for idx, token in enumerate(text_tokens_without_stopwords):
 
             if len(token) > 0 and token[0].isupper():
                 # chunks entities together.
                 entity_chunk += token + " "
+                empty_chunk += 1
                 if token not in self.capital_letter_indexer.keys():
                     self.capital_letter_indexer[token.lower()] = True
             else:
@@ -42,11 +41,10 @@ class Parse:
                 # add entity to the global counter and to the current words set
                 if entity_chunk != '':
                     self.named_entities[entity_chunk] += 1
-                    ne_words.add(entity_chunk)
+                    if empty_chunk > 1:
+                        ne_words.add(entity_chunk)
                     entity_chunk = ''
-
-            token = token.lower()
-            text_tokens_without_stopwords[idx] = token
+                    empty_chunk = 0
             if len(token) == 1 and ord(token) > 126:
                 text_tokens_without_stopwords.pop(idx)
             elif len(token) > 1:
@@ -54,7 +52,7 @@ class Parse:
                     if ord(char) > 126:
                         token = token.replace(char, '')
                 text_tokens_without_stopwords[idx] = token
-            elif token.startswith('#'):
+            if token == '#':
                 self.handle_hashtags(text_tokens_without_stopwords, idx)
             elif token == '@':
                 self.handle_tags(text_tokens_without_stopwords, idx)
@@ -66,14 +64,19 @@ class Parse:
                 self.handle_number(text_tokens_without_stopwords, idx, token)
             elif '-' in token and len(token) > 1:
                 self.handle_dashes(text_tokens_without_stopwords, token)
-        # self.find_named_entities(text_tokens)
+            elif token == 'https' and idx+1 < len(text_tokens_without_stopwords):
+                # Will enter only if there are no urls in the dictionaries.
+                splitted_trl = self.split_url(text_tokens_without_stopwords[idx+1])
+                text_tokens_without_stopwords.extend(splitted_trl)
+                text_tokens_without_stopwords[idx] = ''
+                text_tokens_without_stopwords[idx+1] = ''
+            # if token not in self.stop_words:
+            #     text_tokens_without_stopwords[idx] = token.lower()
 
         # appends named entities to the tokenized list
+        text_tokens_without_stopwords = [w.lower() for w in text_tokens_without_stopwords if w not in self.stop_words]
         for word in ne_words:
-            if word not in text_tokens_without_stopwords:
-                text_tokens_without_stopwords.append(word)
-        # self.find_named_entities_1(ne_doc, text_tokens_without_stopwords)
-        text_tokens_without_stopwords = [w for w in text_tokens_without_stopwords if w not in self.stop_words]
+            text_tokens_without_stopwords.append(word[:-1])
         return text_tokens_without_stopwords
 
     def parse_doc(self, doc_as_list):
@@ -98,6 +101,7 @@ class Parse:
         retweet_quoted_indices = self.json_convert_string_to_object(doc_as_list[13])
 
         dict_list = [url, retweet_url, quote_url, retweet_quoted_url]
+        max_tf = 0
         # holds all URLs in one place
         urls_set = set()
         for d in dict_list:
@@ -106,30 +110,36 @@ class Parse:
                     if key is not None and d[key] is not None:
                         urls_set.add(d[key])
 
-        # removes redundant short URLs from full_text
-        full_text = self.clean_text_from_urls(full_text)
-        # should we do for quoted and retweet texts as well?
         if quote_text is not None:
-            quote_text = self.clean_text_from_urls(quote_text)
+            full_text = full_text+" "+quote_text
+        # removes redundant short URLs from full_text
+        if len(urls_set) > 0:
+            full_text = self.clean_text_from_urls(full_text)
 
         tokenized_text = self.parse_sentence(full_text)
-        if quote_text is not None:
+        # if quote_text is not None:
+        #     full_text = full_text+" "+quote_text
+        #     # Cleans short urls from the quoted text
+        #     quote_text = self.clean_text_from_urls(quote_text)
             # Parse the quoted text as well and add it to the tokenized list.
-            tokenized_text.extend(self.parse_sentence(quote_text))
+            # tokenized_text.extend(self.parse_sentence(quote_text))
 
         self.expand_tokenized_with_url_set(tokenized_text, urls_set)
 
         term_dict = {}
         doc_length = len(tokenized_text)  # after text operations.
-
-        for term in tokenized_text:
+        for idx,term in enumerate(tokenized_text):
             if term not in term_dict.keys():
-                term_dict[term] = 1
+                # holding term's locations at current tweet
+                term_dict[term] = [idx]
+
             else:
-                term_dict[term] += 1
+                term_dict[term].append(idx)
+            if len(term_dict[term]) > max_tf:
+                max_tf = len(term_dict[term])
 
         document = Document(tweet_id, tweet_date, full_text, url, retweet_text, retweet_url, quote_text,
-                            quote_url, term_dict, doc_length)
+                            quote_url, term_dict, doc_length, max_tf, len(term_dict))
         return document
 
     def handle_hashtags(self, text, idx):
@@ -141,9 +151,11 @@ class Parse:
         :return:
         """
         if len(text) > idx + 1:
-            text.extend([x.lower() for x in self.hashtag_split(text[idx + 1])])
+            splitted_hashtags = self.hashtag_split(text[idx + 1])
+            text.extend([x.lower() for x in splitted_hashtags])
             text[idx] = (text[idx] + text[idx + 1]).lower()
-            text.pop(idx + 1)
+            # text.pop(idx + 1)
+            text[idx+1] = ''
 
     def handle_tags(self, text, idx):
         """
@@ -154,7 +166,8 @@ class Parse:
 
         if len(text) > idx + 1:
             text[idx] = (text[idx] + text[idx + 1]).lower()
-            text.pop(idx + 1)
+            # text.pop(idx + 1)
+            text[idx+1] = ''
 
     def hashtag_split(self, tag):
         """
@@ -180,7 +193,8 @@ class Parse:
                 number = self.convert_string_to_float(text[idx - 1])
             if number is not None:  # what if it is some kind of range?
                 text[idx] = text[idx - 1].lower() + "%"
-                text.pop(idx - 1)
+                # text.pop(idx - 1)
+                text[idx-1] = ''
 
     def handle_number(self, text, idx, token):
         """
@@ -278,7 +292,7 @@ class Parse:
         """
         if url is not None:
             r = re.split('[/://?=]', url)
-            return [x for x in r if x != '']
+            return [x for x in r if (x != '' and x != 'https')]
 
     def expand_tokenized_with_url_set(self, to_extend, urls_set):
         """
@@ -348,7 +362,7 @@ class Parse:
         :param text: string
         :return:
         """
-        text = re.sub(r'http\S+', '', text)
+        text = re.sub(r'http\S+|www.\S+', '', text)
         # urls = re.findall('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', full_text)
 
         return text
@@ -373,51 +387,6 @@ class Parse:
     #     url = re.findall(regex, string)
     #     return [x[0] for x in url]
 
-    def find_named_entities(self, text):
-
-        # tagged = nltk.pos_tag(text)
-        # ne = nltk.ne_chunk(tagged)
-        words = set()
-        chunk = ''
-        for token in text:
-            if token[0].isupper():
-                chunk += token + " "
-            else:
-                if chunk != '' and chunk not in self.stop_words:
-                    self.named_entities[chunk] += 1
-                    words.add(chunk)
-                    chunk = ''
-        for word in words:
-            if word not in text:
-                text.append(word)
-        # for s in ne:
-        #     if isinstance(s, nltk.Tree):
-        #         word = ""
-        #         for i in range(len(s.leaves())):
-        #             if i == len(s.leaves()) - 1:
-        #                 word += s[i][0]
-        #             else:
-        #                 word += s[i][0] + " "
-        #         # else:
-        #
-        #         word = word.lower()
-        #         words.add(word)
-        #     else:
-        #         if s[1] in ['NNS', 'NNP', 'NNPS']:
-        #             words.add(s[0])
-        #
-        # for w in words:
-        #     self.named_entities[w] += 1
-
-    def find_named_entities_1(self, ne_doc, text):
-        for ent in ne_doc.ents:
-            if ent.label_ in self.tagging_types:
-                self.named_entities[ent.text] += 1
-                # should check if it's inefficient
-                if ent.text.lower() not in text:
-                    text.append(ent.text)
-
-            
     def handle_dashes(self, text, token):
         """
         Adds token's words separated to the tokenized list.
@@ -437,7 +406,8 @@ class Parse:
             number = self.convert_string_to_float(text[idx - 1])
             if number is not None:
                 text[idx - 1] = text[idx - 1] + " " + token
-                text.pop(idx)
+                # text.pop(idx)
+                text[idx] = ''
             elif token != frac:
                 text.append(frac)
 

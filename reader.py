@@ -37,7 +37,9 @@ class ReadFile:
                             if file.endswith(".parquet"):
                                 # print(dir + subdir + "\\" + file)
                                 # all_docs.extend(self.read_file(dir + subdir + "\\" + file))
-                                all_docs.extend(self.read_file(os.path.join(subdir, file)))
+                                # all_docs.extend(self.read_file(os.path.join(subdir, file)))
+                                paths = os.path.join(folder_path, subdir, file)
+                                all_docs.append(os.path.join(subdir, file))
                 break
 
             else:
