@@ -1,5 +1,4 @@
 import json
-from collections import Counter
 from fractions import Fraction
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
@@ -7,77 +6,99 @@ from document import Document
 import re
 
 
+from stemmer import Stemmer
+
+
 class Parse:
 
-    def __init__(self):
+    def __init__(self, stemming=False):
         self.stop_words = stopwords.words('english')
-        self.stop_words.extend(['', ':', '.', ',', '(', ')', '[', ']', '{', '}', '', '``', 'rt'])
-        self.capital_letter_indexer = {}
-        self.named_entities = Counter()
+        self.stop_words.extend(['', ':', '.', ',', '(', ')', '[', ']', '{', '}', '', '``', 'rt', '“', '’', 'n\'t', '\'s', '\'ve', '\'m'])
+        self.text_tokens = None
+        self.stemmer = None
+        if stemming:
+            self.stemmer = Stemmer()
+        self.hashtag_split_pattern = re.compile(r'[a-zA-Z0-9](?:[a-z0-9]+|[A-Z0-9]*(?=[A-Z]|$))')
+        self.emoji_pattern = re.compile(pattern="["
+                                           u"\U0001F600-\U0001F64F"  # emoticons
+                                           u"\U0001F300-\U0001F5FF"  # symbols & pictographs
+                                           u"\U0001F680-\U0001F6FF"  # transport & map symbols
+                                           u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
+                                           "]+", flags=re.UNICODE)
+        self.left_slash_pattern = re.compile(r'^-?[0-9]+/0*[1-9][0-9]*$')
+        self.right_slash_pattern = re.compile(r'^-?[0-9]+\\0*[1-9][0-9]*$')
+        self.days_dict = {"Sat": "saturday", "Sun": "sunday", "Mon": "monday", "Tue": "tuesday", "Wed": "wednsday",
+                     "Thu": "thursday", "Fri": "friday"}
+        self.months_dict = {"Jul": ("july", "07"), "Aug": ("august", "08")}
 
     def parse_sentence(self, text):
         """
         This function tokenize, remove stop words and apply lower case for every word within the text
         :param text:
+        :param capital_letter_indexer: dictionary for words with capital letters
+        :param named_entities: dictionary for named entities in doc
         :return:
         """
-        text_tokens = word_tokenize(text)
-        text_tokens_without_stopwords = [w for w in text_tokens if w.lower() not in self.stop_words]
-
+        self.text_tokens = word_tokenize(text)
+        tokenized_list = []
         ne_words = set()
         entity_chunk = ''
         empty_chunk = 0
-        # '–' , '-'
-        for idx, token in enumerate(text_tokens_without_stopwords):
+        capital_letter_indexer = {}
+        named_entities = set()
+        # right_side_slash_pat = re.compile(r'^-?[0-9]+/0*[1-9][0-9]*$')
+        # left_side_slash_pat = re.compile(r'^-?[0-9]+\\0*[1-9][0-9]*$')
 
+        # '–' , '-'
+        for idx, token in enumerate(self.text_tokens):
+            if self.stemmer is not None:
+                token = self.stemmer.stem_term(token)
+                self.text_tokens[idx] = token
+            # token = self.take_off_emoji(token)
+            token = self.take_emoji_off(token) #this one is faster
+            self.text_tokens[idx] = token
+            if token == '' or token.lower() in self.stop_words:
+                continue
             if len(token) > 0 and token[0].isupper():
                 # chunks entities together.
                 entity_chunk += token + " "
                 empty_chunk += 1
-                if token not in self.capital_letter_indexer.keys():
-                    self.capital_letter_indexer[token.lower()] = True
+                if token not in capital_letter_indexer:
+                    capital_letter_indexer[token.lower()] = True
             else:
-                self.capital_letter_indexer[token] = False
+                capital_letter_indexer[token] = False
                 # add entity to the global counter and to the current words set
                 if entity_chunk != '':
-                    self.named_entities[entity_chunk] += 1
+                    named_entities.add(entity_chunk[:-1])
                     if empty_chunk > 1:
                         ne_words.add(entity_chunk)
                     entity_chunk = ''
                     empty_chunk = 0
-            if len(token) == 1 and ord(token) > 126:
-                text_tokens_without_stopwords.pop(idx)
-            elif len(token) > 1:
-                for char in token:
-                    if ord(char) > 126:
-                        token = token.replace(char, '')
-                text_tokens_without_stopwords[idx] = token
+
             if token == '#':
-                self.handle_hashtags(text_tokens_without_stopwords, idx)
+                self.handle_hashtags(tokenized_list, idx)
             elif token == '@':
-                self.handle_tags(text_tokens_without_stopwords, idx)
-            elif re.match('/[1-9][0-9]*\/[1-9][0-9]*/g', token):
-                self.handle_fraction(text_tokens_without_stopwords, token, idx)
+                self.handle_tags(tokenized_list, idx)
+            elif self.is_fraction(token):
+                self.handle_fraction(tokenized_list, token, idx)
             elif token in ["%", "percent", "percentage"]:
-                self.handle_percent(text_tokens_without_stopwords, idx)
-            elif token.isnumeric() or "," in token or '/' in token:
-                self.handle_number(text_tokens_without_stopwords, idx, token)
+                self.handle_percent(tokenized_list, idx)
+            elif token.isnumeric() or "," in token:
+                self.handle_number(tokenized_list, idx, token)
             elif '-' in token and len(token) > 1:
-                self.handle_dashes(text_tokens_without_stopwords, token)
-            elif token == 'https' and idx+1 < len(text_tokens_without_stopwords):
+                self.handle_dashes(tokenized_list, token)
+            elif token == 'https' and idx + 2 < len(self.text_tokens):
                 # Will enter only if there are no urls in the dictionaries.
-                splitted_trl = self.split_url(text_tokens_without_stopwords[idx+1])
-                text_tokens_without_stopwords.extend(splitted_trl)
-                text_tokens_without_stopwords[idx] = ''
-                text_tokens_without_stopwords[idx+1] = ''
-            # if token not in self.stop_words:
-            #     text_tokens_without_stopwords[idx] = token.lower()
+                splitted_trl = self.split_url(self.text_tokens[idx + 2])
+                tokenized_list.extend(splitted_trl)
+                self.text_tokens[idx + 2] = ''
+            else:
+                tokenized_list.append(token.lower())
 
         # appends named entities to the tokenized list
-        text_tokens_without_stopwords = [w.lower() for w in text_tokens_without_stopwords if w not in self.stop_words]
         for word in ne_words:
-            text_tokens_without_stopwords.append(word[:-1])
-        return text_tokens_without_stopwords
+            tokenized_list.append(word[:-1])
+        return tokenized_list, capital_letter_indexer, named_entities
 
     def parse_doc(self, doc_as_list):
         """
@@ -89,16 +110,18 @@ class Parse:
         tweet_date = doc_as_list[1]
         full_text = doc_as_list[2]
         url = self.json_convert_string_to_object(doc_as_list[3])
-        url_indices = self.json_convert_string_to_object(doc_as_list[4])
+        # url_indices = self.json_convert_string_to_object(doc_as_list[4])
         retweet_text = doc_as_list[5]
         retweet_url = self.json_convert_string_to_object(doc_as_list[6])
-        retweet_url_indices = self.json_convert_string_to_object(doc_as_list[7])
+        # retweet_url_indices = self.json_convert_string_to_object(doc_as_list[7])
         quote_text = doc_as_list[8]
         quote_url = self.json_convert_string_to_object(doc_as_list[9])
-        quoted_indices = self.json_convert_string_to_object(doc_as_list[10])
-        retweet_quoted_text = doc_as_list[11]
+        # quoted_indices = self.json_convert_string_to_object(doc_as_list[10])
+        # retweet_quoted_text = doc_as_list[11]
         retweet_quoted_url = self.json_convert_string_to_object(doc_as_list[12])
-        retweet_quoted_indices = self.json_convert_string_to_object(doc_as_list[13])
+        # retweet_quoted_indices = self.json_convert_string_to_object(doc_as_list[13])
+        capital_letter_indexer = {}
+        named_entities = set()
 
         dict_list = [url, retweet_url, quote_url, retweet_quoted_url]
         max_tf = 0
@@ -111,24 +134,22 @@ class Parse:
                         urls_set.add(d[key])
 
         if quote_text is not None:
-            full_text = full_text+" "+quote_text
+            full_text = full_text + " " + quote_text
+
         # removes redundant short URLs from full_text
         if len(urls_set) > 0:
             full_text = self.clean_text_from_urls(full_text)
+        # self.text_tokens = word_tokenize(full_text)
+        tokenized_text, capital_letter_indexer, named_entities = self.parse_sentence(full_text)
 
-        tokenized_text = self.parse_sentence(full_text)
-        # if quote_text is not None:
-        #     full_text = full_text+" "+quote_text
-        #     # Cleans short urls from the quoted text
-        #     quote_text = self.clean_text_from_urls(quote_text)
-            # Parse the quoted text as well and add it to the tokenized list.
-            # tokenized_text.extend(self.parse_sentence(quote_text))
+        tokenized_text.extend(self.handle_dates(tweet_date))
 
-        self.expand_tokenized_with_url_set(tokenized_text, urls_set)
+
+        # self.expand_tokenized_with_url_set(tokenized_text, urls_set)
 
         term_dict = {}
         doc_length = len(tokenized_text)  # after text operations.
-        for idx,term in enumerate(tokenized_text):
+        for idx, term in enumerate(tokenized_text):
             if term not in term_dict.keys():
                 # holding term's locations at current tweet
                 term_dict[term] = [idx]
@@ -139,10 +160,11 @@ class Parse:
                 max_tf = len(term_dict[term])
 
         document = Document(tweet_id, tweet_date, full_text, url, retweet_text, retweet_url, quote_text,
-                            quote_url, term_dict, doc_length, max_tf, len(term_dict))
+                            quote_url, term_dict, doc_length, max_tf, len(term_dict),
+                            capital_letter_indexer, named_entities)
         return document
 
-    def handle_hashtags(self, text, idx):
+    def handle_hashtags(self, tokenized_list, idx):
         """
         merges text_tokens[idx] with text_tokens[idx+1] such that '#','exampleText' becomes '#exampleText'
         and inserts 'example' and 'Text' to text_tokens
@@ -150,24 +172,26 @@ class Parse:
         :param idx: index of # in text_tokens
         :return:
         """
-        if len(text) > idx + 1:
-            splitted_hashtags = self.hashtag_split(text[idx + 1])
-            text.extend([x.lower() for x in splitted_hashtags])
-            text[idx] = (text[idx] + text[idx + 1]).lower()
+        if len(self.text_tokens) > idx + 1:
+            splitted_hashtags = self.hashtag_split(self.text_tokens[idx + 1])
+            # text.extend([x.lower() for x in splitted_hashtags])
+            # text[idx] = (text[idx] + text[idx + 1]).lower()
+            tokenized_list.append((self.text_tokens[idx] + self.text_tokens[idx + 1]).lower())
+            tokenized_list.extend([x.lower() for x in splitted_hashtags])
             # text.pop(idx + 1)
-            text[idx+1] = ''
+            self.text_tokens[idx + 1] = ''
 
-    def handle_tags(self, text, idx):
+    def handle_tags(self, tokenized_list, idx):
         """
         merges text_tokens[idx] with text_tokens[idx+1] such that '@','example' becomes '@example'
         :param text: list of tokenized words
         :param idx: index of @ in text_tokens
         """
 
-        if len(text) > idx + 1:
-            text[idx] = (text[idx] + text[idx + 1]).lower()
+        if len(self.text_tokens) > idx + 1:
+            tokenized_list.append((self.text_tokens[idx] + self.text_tokens[idx + 1]).lower())
             # text.pop(idx + 1)
-            text[idx+1] = ''
+            self.text_tokens[idx + 1] = ''
 
     def hashtag_split(self, tag):
         """
@@ -175,9 +199,9 @@ class Parse:
         :param tag: single hash-tag string
         :return: list of words in tag
         """
-        return re.findall(r'[a-zA-Z0-9](?:[a-z0-9]+|[A-Z0-9]*(?=[A-Z]|$))', tag)
+        return re.findall(self.hashtag_split_pattern, tag)
 
-    def handle_percent(self, text, idx):
+    def handle_percent(self, tokenized_list, idx):
         """
         merges text_tokens[idx] with text_tokens[idx-1] such that "%"/"percent"/"percentage",'50' becomes '50%'
         :param text: list of tokenized words
@@ -187,16 +211,20 @@ class Parse:
 
         if idx is not 0:
             # if text_tokens[idx - 1].isnumeric():  # what if it is some kind of range?
-            if re.match('/[1-9][0-9]*\/[1-9][0-9]*/g', text[idx - 1]):
-                number = text[idx - 1]
+            dash_idx = self.text_tokens[idx - 1].find('-')
+            if self.is_fraction(self.text_tokens[idx - 1]):
+                number = self.text_tokens[idx - 1]
             else:
-                number = self.convert_string_to_float(text[idx - 1])
+                number = self.convert_string_to_float(self.text_tokens[idx - 1])
             if number is not None:  # what if it is some kind of range?
-                text[idx] = text[idx - 1].lower() + "%"
-                # text.pop(idx - 1)
-                text[idx-1] = ''
+                tokenized_list.append(self.text_tokens[idx - 1].lower() + "%")
+            elif dash_idx != -1:
+                left = self.text_tokens[idx - 1][:dash_idx]
+                right = self.text_tokens[idx - 1][dash_idx + 1:]
+                if left.isnumeric() and right.isnumeric():
+                    tokenized_list.append(self.text_tokens[idx - 1].lower() + "%")
 
-    def handle_number(self, text, idx, token):
+    def handle_number(self, tokenized_list, idx, token):
         """
         converts all numbers to single format:
         2 -> 2
@@ -206,32 +234,28 @@ class Parse:
         :param text: list of tokenized words
         :param idx: index of % in text_tokens
         :param token: text_tokens[idx]
+        :param tokenized_list: tokenized_list
         :return:
         """
-        # if "," in token:
-        #     token = token.replace(",", "")
-        #     if not token.isnumeric():
-        #         return
-
         number = self.convert_string_to_float(token)
         if number is None:
+            tokenized_list.append(token)
             return
 
-        # number = float(token)
         multiplier = 1
 
-        if len(text) > idx + 1:
-            if text[idx + 1] in ["%", "percent", "percentage"]:
+        if len(self.text_tokens) > idx + 1:
+            if self.text_tokens[idx + 1] in ["%", "percent", "percentage"]:
                 return
 
-            if text[idx + 1].lower() in ["thousand", "million", "billion"]:
-                if text[idx + 1].lower() == "thousand":
+            if self.text_tokens[idx + 1].lower() in ["thousand", "million", "billion"]:
+                if self.text_tokens[idx + 1].lower() == "thousand":
                     multiplier = 1000
-                elif text[idx + 1].lower() == "million":
+                elif self.text_tokens[idx + 1].lower() == "million":
                     multiplier = 1000000
-                elif text[idx + 1].lower() == "billion":
+                elif self.text_tokens[idx + 1].lower() == "billion":
                     multiplier = 1000000000
-                text.pop(idx + 1)
+                self.text_tokens[idx + 1] = ''
 
         number = number * multiplier
         kmb = ""
@@ -262,7 +286,7 @@ class Parse:
         else:
             number = str(number)
 
-        text[idx] = number + kmb
+        tokenized_list.append(number + kmb)
 
     def convert_string_to_float(self, s):
         """
@@ -279,7 +303,6 @@ class Parse:
             return number
         except:
             return None
-
 
     def split_url(self, url):
         """
@@ -304,21 +327,27 @@ class Parse:
         for url in urls_set:
             to_extend.extend(self.split_url(url))
 
-    # def expand_tokenized_with_url_dict(self, to_extend, url_dict):
-    #     """
-    #     extends the to_extend list with the components of the values in url_dict
-    #     :param to_extend: list to extend
-    #     :param url_dict: dictionary containing URL strings as values
-    #     :return:
-    #     """
-    #     try:
-    #         if url_dict is None:
-    #             return
-    #         for v in url_dict.values():
-    #             if v is not None:
-    #                 to_extend.extend(self.split_url(v))
-    #     except:
-    #         print(url_dict)
+    def take_off_emoji(self, token):
+        """
+        takes unnecessary emojies off the text.
+        :param token: string
+        :return: string without the emojies
+        """
+        if len(token) == 1 and ord(token) > 126:
+            return ''
+        for idx in range(len(token)):
+            if 0 <= ord(token[idx]) < 126:
+                token = token[idx:]
+                break
+        for idx in range(len(token) - 1, 0, -1):
+            if 0 <= ord(token[idx]) < 126:
+                token = token[:idx + 1]
+                break
+
+        return token
+
+    def take_emoji_off(self, token):
+        return self.emoji_pattern.sub(r'', token)
 
     def json_convert_string_to_object(self, s):
         """
@@ -326,89 +355,81 @@ class Parse:
         :param s: string to convert
         :return: Object / None
         """
-        if s is None:
-            return s
+        if s is None or s == '{}':
+            return None
         else:
             return json.loads(s)
-
-    # def clean_text(self, text, indices1, indices2, indices3, indices4):
-    #     """
-    #     for each indices[i], removes all characters in text between indices[i][0] to indices[i][1]
-    #     :param text: string to clean
-    #     :param indices: list of lists,each sub-list contains starting index and end index at indices[i][0],indices[i][1]
-    #     :return: string text
-    #     """
-    #     indices = []
-    #     if indices1 is not None:
-    #         indices.extend(indices1)
-    #     if indices2 is not None:
-    #         indices.extend(indices2)
-    #     if indices3 is not None:
-    #         indices.extend(indices3)
-    #     if indices4 is not None:
-    #         indices.extend(indices4)
-    #     if indices is None and indices != []:
-    #         return text
-    #     indices.sort(key=lambda x: x[0], reverse=True)
-    #     for indexes in indices:
-    #         if text[indexes[0]:indexes[0] + 5] == "https":
-    #             text = text[:indexes[0]] + text[indexes[1]:]
-    #
-    #     return text
 
     def clean_text_from_urls(self, text):
         """
         removes all URLs from text
         :param text: string
-        :return:
+        :return: string without urls
         """
         text = re.sub(r'http\S+|www.\S+', '', text)
-        # urls = re.findall('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', full_text)
-
         return text
 
-    # def use_porter_stemmer(self, list_str):
-    #     """
-    #     stemms each word in list_str
-    #     :param list_str: list of strings
-    #     :return: stemmed list of words
-    #     """
-    #     ps = PorterStemmer()
-    #     stemmed_list = []
-    #     for w in list_str:
-    #         stemmed_list.append(ps.stem(w))
-    #
-    #     return stemmed_list
-
-    # def Find(self, string):
-    #     # findall() has been used
-    #     # with valid conditions for urls in string
-    #     regex = r"(?i)\b((?:https?://|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))\)|[^\s`!()\[\]{};:'\".,<>?«»“”‘’]))"
-    #     url = re.findall(regex, string)
-    #     return [x[0] for x in url]
-
-    def handle_dashes(self, text, token):
+    def handle_dashes(self, tokenized_list, token):
         """
         Adds token's words separated to the tokenized list.
         e.g: Word-word will be handled as [Word,word, Word-word]
-        :param text: List of tokens, tokens will be added to this list
         :param token: String to separate
         :return: None
         """
-        text.append(token[:token.find('-')])
-        text.append(token[token.find('-') + 1:])
+        dash_idx = token.find('-')
+        tokenized_list.append(token.lower())
+        tokenized_list.append(token[:dash_idx].lower())
+        tokenized_list.append(token[dash_idx + 1:].lower())
 
-    def handle_fraction(self, text, token, idx):
+    def handle_fraction(self, tokenized_list, token, idx):
+        """
+        takes care of strings representing fractions
+        if there is a number before the fraction, it concats both tokens into one.
+        :param text:
+        :param tokenized_list:
+        :param token:
+        :param idx:
+        :return:
+        """
+        slash_idx = token.find('\\')
+        if slash_idx != -1:
+            token[slash_idx] = '/'
         frac = str(Fraction(token))
         if idx == 0 and frac != token:
-            text.append(frac)
+            tokenized_list.append(frac)
         else:
-            number = self.convert_string_to_float(text[idx - 1])
+            number = self.convert_string_to_float(self.text_tokens[idx - 1])
             if number is not None:
-                text[idx - 1] = text[idx - 1] + " " + token
-                # text.pop(idx)
-                text[idx] = ''
+                tokenized_list.append(self.text_tokens[idx - 1] + " " + token)
+                self.text_tokens[idx] = ''
             elif token != frac:
-                text.append(frac)
+                tokenized_list.append(frac)
+                tokenized_list.append(token)
+            else:
+                tokenized_list.append(token)
+
+    def is_fraction(self, token):
+        """
+        checks whether given token is a fraction.
+        :param token: string
+        :return: boolean
+        """
+        # return re.match(r'^-?[0-9]+/0*[1-9][0-9]*$', token) is not None or \
+        #        re.match(r'^-?[0-9]+\\0*[1-9][0-9]*$', token) is not None
+        return re.match(self.right_slash_pattern, token) is not None or \
+               re.match(self.left_slash_pattern, token) is not None
+
+    def handle_dates(self, tweet_date):
+        """
+        takes tweet's date and parsing it's information into tokenized_list
+        :param tweet_date: date in string
+        :return: list of parsed information
+        """
+        splitted_date = tweet_date.split()
+        day_txt = self.days_dict[splitted_date[0]]
+        day_num = splitted_date[2]
+        month_txt, month_num = self.months_dict[splitted_date[1]]
+        date_num = day_num + "/" + month_num + "/" + splitted_date[5]
+        return [day_txt, month_txt, date_num, splitted_date[3]]
 
 
