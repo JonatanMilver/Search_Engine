@@ -14,6 +14,7 @@ class Parse:
     def __init__(self, stemming=False):
         self.stop_words = stopwords.words('english')
         self.stop_words.extend(['', ':', '.', ',', '(', ')', '[', ']', '{', '}', '', '``', 'rt', '“', '’', 'n\'t', '\'s', '\'ve', '\'m'])
+        self.stop_words_dict = dict.fromkeys(self.stop_words)
         self.text_tokens = None
         self.stemmer = None
         if stemming:
@@ -57,7 +58,8 @@ class Parse:
             # token = self.take_off_emoji(token)
             token = self.take_emoji_off(token) #this one is faster
             self.text_tokens[idx] = token
-            if token == '' or token.lower() in self.stop_words:
+            # if token == '' or token.lower() in self.stop_words:
+            if token == '' or token.lower() in self.stop_words_dict:
                 continue
             if len(token) > 0 and token[0].isupper():
                 # chunks entities together.
@@ -327,24 +329,24 @@ class Parse:
         for url in urls_set:
             to_extend.extend(self.split_url(url))
 
-    def take_off_emoji(self, token):
-        """
-        takes unnecessary emojies off the text.
-        :param token: string
-        :return: string without the emojies
-        """
-        if len(token) == 1 and ord(token) > 126:
-            return ''
-        for idx in range(len(token)):
-            if 0 <= ord(token[idx]) < 126:
-                token = token[idx:]
-                break
-        for idx in range(len(token) - 1, 0, -1):
-            if 0 <= ord(token[idx]) < 126:
-                token = token[:idx + 1]
-                break
-
-        return token
+    # def take_off_emoji(self, token):
+    #     """
+    #     takes unnecessary emojies off the text.
+    #     :param token: string
+    #     :return: string without the emojies
+    #     """
+    #     if len(token) == 1 and ord(token) > 126:
+    #         return ''
+    #     for idx in range(len(token)):
+    #         if 0 <= ord(token[idx]) < 126:
+    #             token = token[idx:]
+    #             break
+    #     for idx in range(len(token) - 1, 0, -1):
+    #         if 0 <= ord(token[idx]) < 126:
+    #             token = token[:idx + 1]
+    #             break
+    #
+    #     return token
 
     def take_emoji_off(self, token):
         return self.emoji_pattern.sub(r'', token)
@@ -393,7 +395,11 @@ class Parse:
         """
         slash_idx = token.find('\\')
         if slash_idx != -1:
-            token[slash_idx] = '/'
+            # try:
+            # token[slash_idx] = '/'
+            token = token[:slash_idx] + '/' + token[slash_idx+1:]
+            # except:
+            #     print()
         frac = str(Fraction(token))
         if idx == 0 and frac != token:
             tokenized_list.append(frac)

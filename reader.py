@@ -32,7 +32,8 @@ class ReadFile:
         for dir, subdirs, files in os.walk(folder_path):  # folder_path should be changed to self.corpus_path
             if subdirs:
                 for subdir in tqdm(subdirs):
-                    for d, dirs, subfiles in os.walk(dir + subdir):
+                    # for d, dirs, subfiles in os.walk(dir + subdir):
+                    for d, dirs, subfiles in os.walk(os.path.join(dir, subdir)):
                         for file in subfiles:
                             if file.endswith(".parquet"):
                                 # print(dir + subdir + "\\" + file)
