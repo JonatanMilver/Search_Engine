@@ -8,8 +8,8 @@ import utils
 from tqdm import tqdm
 
 # one_file = "C:\\Users\\yonym\\Desktop\\ThirdYear\\IR\\engineV1\\Data\\date=08-07-2020\\covid19_08-07.snappy.parquet"
-# one_file = "C:\\Users\\Guyza\\OneDrive\\Desktop\\Information_Systems\\University\\Third_year\\Semester_E\\Information_Retrieval\\Search_Engine_Project\\Data\\Data\\date=07-27-2020\\covid19_07-27.snappy.parquet"
-one_file = "C:\\Users\\Guyza\\OneDrive\\Desktop\\Information_Systems\\University\\Third_year\\Semester_E\\Information_Retrieval\\Search_Engine_Project\\Data\\Data\\date=07-21-2020\\covid19_07-21.snappy.parquet"
+one_file = "C:\\Users\\Guyza\\OneDrive\\Desktop\\Information_Systems\\University\\Third_year\\Semester_E\\Information_Retrieval\\Search_Engine_Project\\Data\\Data\\date=07-27-2020\\covid19_07-27.snappy.parquet"
+# one_file = "C:\\Users\\Guyza\\OneDrive\\Desktop\\Information_Systems\\University\\Third_year\\Semester_E\\Information_Retrieval\\Search_Engine_Project\\Data\\Data\\date=07-21-2020\\covid19_07-21.snappy.parquet"
 corpus_path = "C:\\Users\\yonym\\Desktop\\ThirdYear\\IR\\engineV1\\Data\\"
 
 
@@ -42,8 +42,12 @@ def run_engine(corpus_path=None, output_path='', stemming=False):
 
     print('Finished parsing and indexing. Starting to export files')
 
+    # utils.save_obj(indexer.inverted_idx, "inverted_idx", config.get_out_path())
+    # utils.save_obj(indexer.postingDict, str(indexer.counter_of_postings), config.get_out_path())
+    indexer.save_postings()
+
+    indexer.first()
     utils.save_obj(indexer.inverted_idx, "inverted_idx", config.get_out_path())
-    utils.save_obj(indexer.postingDict, str(indexer.counter_of_postings), config.get_out_path())
 
 
 
