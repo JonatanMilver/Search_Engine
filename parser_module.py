@@ -32,6 +32,8 @@ class Parse:
                      "Thu": "thursday", "Fri": "friday"}
         self.months_dict = {"Jul": ("july", "07"), "Aug": ("august", "08")}
 
+        self.kbm_shorts = {"k": None, "m": None, "b" : None, "K" : None, "M" : None, "B" : None}
+
     def parse_sentence(self, text):
         """
         This function tokenize, remove stop words and apply lower case for every word within the text
@@ -50,25 +52,25 @@ class Parse:
         # right_side_slash_pat = re.compile(r'^-?[0-9]+/0*[1-9][0-9]*$')
         # left_side_slash_pat = re.compile(r'^-?[0-9]+\\0*[1-9][0-9]*$')
 
-        # '–' , '-'
         for idx, token in enumerate(self.text_tokens):
             if self.stemmer is not None:
                 token = self.stemmer.stem_term(token)
                 self.text_tokens[idx] = token
-            # token = self.take_off_emoji(token)
+
             token = self.take_emoji_off(token) #this one is faster
             self.text_tokens[idx] = token
-            # if token == '' or token.lower() in self.stop_words:
+
             if token == '' or token.lower() in self.stop_words_dict:
                 continue
+
             if len(token) > 0 and token[0].isupper():
                 # chunks entities together.
                 entity_chunk += token + " "
                 empty_chunk += 1
-                if token not in capital_letter_indexer:
-                    capital_letter_indexer[token.lower()] = True
+                # if token not in capital_letter_indexer:
+                #     capital_letter_indexer[token.lower()] = True
             else:
-                capital_letter_indexer[token] = False
+                # capital_letter_indexer[token.lower()] = False
                 # add entity to the global counter and to the current words set
                 if entity_chunk != '':
                     named_entities.add(entity_chunk[:-1])
@@ -86,7 +88,7 @@ class Parse:
             elif token in ["%", "percent", "percentage"]:
                 self.handle_percent(tokenized_list, idx)
             elif token.isnumeric() or "," in token:
-                self.handle_number(tokenized_list, idx, token)
+                self.handle_number(tokenized_list, idx, token, capital_letter_indexer)
             elif '-' in token and len(token) > 1:
                 self.handle_dashes(tokenized_list, token)
             elif token == 'https' and idx + 2 < len(self.text_tokens):
@@ -94,8 +96,10 @@ class Parse:
                 splitted_trl = self.split_url(self.text_tokens[idx + 2])
                 tokenized_list.extend(splitted_trl)
                 self.text_tokens[idx + 2] = ''
+            elif token[-1] in self.kbm_shorts and self.convert_string_to_float(token[:-1]):
+                tokenized_list.append(token.upper())
             else:
-                tokenized_list.append(token.lower())
+                self.append_to_tokenized(tokenized_list, capital_letter_indexer, token)
 
         # appends named entities to the tokenized list
         for word in ne_words:
@@ -141,13 +145,12 @@ class Parse:
         # removes redundant short URLs from full_text
         if len(urls_set) > 0:
             full_text = self.clean_text_from_urls(full_text)
-        # self.text_tokens = word_tokenize(full_text)
+
         tokenized_text, capital_letter_indexer, named_entities = self.parse_sentence(full_text)
 
         tokenized_text.extend(self.handle_dates(tweet_date))
 
-
-        # self.expand_tokenized_with_url_set(tokenized_text, urls_set)
+        self.expand_tokenized_with_url_set(tokenized_text, urls_set)
 
         term_dict = {}
         doc_length = len(tokenized_text)  # after text operations.
@@ -226,7 +229,7 @@ class Parse:
                 if left.isnumeric() and right.isnumeric():
                     tokenized_list.append(self.text_tokens[idx - 1].lower() + "%")
 
-    def handle_number(self, tokenized_list, idx, token):
+    def handle_number(self, tokenized_list, idx, token, capital_letter_indexer):
         """
         converts all numbers to single format:
         2 -> 2
@@ -288,6 +291,10 @@ class Parse:
         else:
             number = str(number)
 
+        # if len(kmb) == 0:
+        #     capital_letter_indexer[number] = False
+        # else:
+        #     capital_letter_indexer[number+kmb] = True
         tokenized_list.append(number + kmb)
 
     def convert_string_to_float(self, s):
@@ -317,6 +324,10 @@ class Parse:
         """
         if url is not None:
             r = re.split('[/://?=]', url)
+            if 'twitter.com' in r or 't.co' in r:
+                return [r[-1]]
+            if len(r) > 3 and 'www.' in r[3]:
+                r[3] = r[3][4:]
             return [x for x in r if (x != '' and x != 'https')]
 
     def expand_tokenized_with_url_set(self, to_extend, urls_set):
@@ -438,4 +449,11 @@ class Parse:
         date_num = day_num + "/" + month_num + "/" + splitted_date[5]
         return [day_txt, month_txt, date_num, splitted_date[3]]
 
+    def append_to_tokenized(self, tokenized_list, capital_letters, token):
+        if len(token) > 0 and token[0].isupper():
+            if token not in capital_letters:
+                capital_letters[token.lower()] = True
+        else:
+            capital_letters[token.lower()] = False
+        tokenized_list.append(token.lower())
 
