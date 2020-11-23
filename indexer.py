@@ -16,6 +16,7 @@ class Indexer:
         self.postingDict = {}
         self.postingDict_size = 50000
         self.counter_of_postings = 1
+        self.global_capitals = {}
 
         self.entities_dict = Counter()
         self.config = config
@@ -32,6 +33,13 @@ class Indexer:
 
         document_dictionary = document.term_doc_dictionary
         document_capitals = document.capital_letter_indexer
+        for key_term in document_capitals:
+            if key_term not in self.global_capitals:
+                self.global_capitals[key_term] = document_capitals[key_term]
+            else:
+                if not document_capitals[key_term]:
+                    self.global_capitals[key_term] = False
+
         document_entities = document.named_entities
 
         for entity in document_entities:
@@ -438,6 +446,32 @@ class Indexer:
                 new_merged.append(added_dicts)
                 i = i + 2
             return new_merged
+
+    def switch_to_capitals(self):
+        for posting in self.merged_dicts[0]:
+            posting_file = utils.load_obj(posting, '')
+            new_posting = {}
+            changed = False
+            for term in posting_file:
+                if term in self.entities_dict and self.entities_dict[term] < 2:
+                    changed = True
+                    del self.inverted_idx[term]
+                    continue
+                if term in self.global_capitals and self.global_capitals[term]:
+                    changed = True
+                    # switch in inverted index
+                    inverted_val = self.inverted_idx[term]
+                    del self.inverted_idx[term]
+                    self.inverted_idx[term.upper()] = inverted_val
+                    # switch in current posting file
+                    posting_val = posting_file[term]
+                    # del posting_file[term]
+                    new_posting[term.upper()] = posting_file[term]
+                    # posting_file[term.upper()] = posting_val
+                else:
+                    new_posting[term] = posting_file[term]
+            if changed:
+                utils.save_obj(new_posting, posting, '')
 
 
     def save_new_dict(self, new_dict, added_dicts):
