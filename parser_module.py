@@ -13,7 +13,8 @@ class Parse:
 
     def __init__(self, stemming=False):
         self.stop_words = stopwords.words('english')
-        self.stop_words.extend(['', ':', '.', ',', '(', ')', '[', ']', '{', '}', '', '``', 'rt', '“', '’', 'n\'t', '\'s', '\'ve', '\'m'])
+        self.stop_words.extend(['', ':',';', '.', ',', '(', ')', '[', ']', '{', '}',
+                                '', '``', 'rt', '“', '’', 'n\'t', '\'s', '\'ve', '\'m', '...', '\'\'', '\'d', '&', '\'ll', '\'re'])
         self.stop_words_dict = dict.fromkeys(self.stop_words)
         self.text_tokens = None
         self.stemmer = None
@@ -25,7 +26,11 @@ class Parse:
                                            u"\U0001F300-\U0001F5FF"  # symbols & pictographs
                                            u"\U0001F680-\U0001F6FF"  # transport & map symbols
                                            u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
-                                           "]+", flags=re.UNICODE)
+                                           "]+"
+                                        , flags=re.UNICODE)
+        # self.emoji_pattern = re.compile(pattern=
+        #                                 '(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])'
+        #                                 , flags=re.UNICODE)
         self.left_slash_pattern = re.compile(r'^-?[0-9]+/0*[1-9][0-9]*$')
         self.right_slash_pattern = re.compile(r'^-?[0-9]+\\0*[1-9][0-9]*$')
         self.days_dict = {"Sat": "saturday", "Sun": "sunday", "Mon": "monday", "Tue": "tuesday", "Wed": "wednsday",
@@ -60,7 +65,7 @@ class Parse:
             token = self.take_emoji_off(token) #this one is faster
             self.text_tokens[idx] = token
 
-            if token == '' or token.lower() in self.stop_words_dict:
+            if token == '' or token.lower() in self.stop_words_dict or (len(token) == 1 and ord(token) > 126):
                 continue
 
             if len(token) > 0 and token[0].isupper():
@@ -98,6 +103,8 @@ class Parse:
                 self.text_tokens[idx + 2] = ''
             elif token[-1] in self.kbm_shorts and self.convert_string_to_float(token[:-1]):
                 tokenized_list.append(token.upper())
+            elif token == '$':
+                tokenized_list.append('dollar') #??????
             else:
                 self.append_to_tokenized(tokenized_list, capital_letter_indexer, token)
 
@@ -406,11 +413,7 @@ class Parse:
         """
         slash_idx = token.find('\\')
         if slash_idx != -1:
-            # try:
-            # token[slash_idx] = '/'
             token = token[:slash_idx] + '/' + token[slash_idx+1:]
-            # except:
-            #     print()
         frac = str(Fraction(token))
         if idx == 0 and frac != token:
             tokenized_list.append(frac)
@@ -455,5 +458,6 @@ class Parse:
                 capital_letters[token.lower()] = True
         else:
             capital_letters[token.lower()] = False
-        tokenized_list.append(token.lower())
+        if token.lower() not in self.stop_words_dict:
+            tokenized_list.append(token.lower())
 
