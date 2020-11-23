@@ -99,10 +99,11 @@ class Parse:
             elif token == 'https' and idx + 2 < len(self.text_tokens):
                 # Will enter only if there are no urls in the dictionaries.
                 splitted_trl = self.split_url(self.text_tokens[idx + 2])
-                tokenized_list.extend(splitted_trl)
+                tokenized_list.extend([x.lower() for x in splitted_trl])
                 self.text_tokens[idx + 2] = ''
             elif token[-1] in self.kbm_shorts and self.convert_string_to_float(token[:-1]):
                 tokenized_list.append(token.upper())
+                # tokenized_list.append(token.lower())
             elif token == '$':
                 tokenized_list.append('dollar') #??????
             else:
@@ -110,7 +111,7 @@ class Parse:
 
         # appends named entities to the tokenized list
         for word in ne_words:
-            tokenized_list.append(word[:-1])
+            tokenized_list.append(word[:-1].lower())
         return tokenized_list, capital_letter_indexer, named_entities
 
     def parse_doc(self, doc_as_list):
@@ -155,7 +156,7 @@ class Parse:
 
         tokenized_text, capital_letter_indexer, named_entities = self.parse_sentence(full_text)
 
-        tokenized_text.extend(self.handle_dates(tweet_date))
+        tokenized_text.extend([x.lower() for x in self.handle_dates(tweet_date)])
 
         self.expand_tokenized_with_url_set(tokenized_text, urls_set)
 
@@ -186,8 +187,6 @@ class Parse:
         """
         if len(self.text_tokens) > idx + 1:
             splitted_hashtags = self.hashtag_split(self.text_tokens[idx + 1])
-            # text.extend([x.lower() for x in splitted_hashtags])
-            # text[idx] = (text[idx] + text[idx + 1]).lower()
             tokenized_list.append((self.text_tokens[idx] + self.text_tokens[idx + 1]).lower())
             tokenized_list.extend([x.lower() for x in splitted_hashtags])
             # text.pop(idx + 1)
@@ -251,7 +250,7 @@ class Parse:
         """
         number = self.convert_string_to_float(token)
         if number is None:
-            tokenized_list.append(token)
+            tokenized_list.append(token.lower())
             return
 
         multiplier = 1
@@ -335,7 +334,7 @@ class Parse:
                 return [r[-1]]
             if len(r) > 3 and 'www.' in r[3]:
                 r[3] = r[3][4:]
-            return [x for x in r if (x != '' and x != 'https')]
+            return [x.lower() for x in r if (x != '' and x != 'https')]
 
     def expand_tokenized_with_url_set(self, to_extend, urls_set):
         """
@@ -416,17 +415,17 @@ class Parse:
             token = token[:slash_idx] + '/' + token[slash_idx+1:]
         frac = str(Fraction(token))
         if idx == 0 and frac != token:
-            tokenized_list.append(frac)
+            tokenized_list.append(frac.lower())
         else:
             number = self.convert_string_to_float(self.text_tokens[idx - 1])
             if number is not None:
-                tokenized_list.append(self.text_tokens[idx - 1] + " " + token)
+                tokenized_list.append((self.text_tokens[idx - 1] + " " + token).lower())
                 self.text_tokens[idx] = ''
             elif token != frac:
-                tokenized_list.append(frac)
-                tokenized_list.append(token)
+                tokenized_list.append(frac.lower())
+                tokenized_list.append(token.lower())
             else:
-                tokenized_list.append(token)
+                tokenized_list.append(token.lower())
 
     def is_fraction(self, token):
         """
