@@ -7,8 +7,8 @@ import utils
 
 from tqdm import tqdm
 
-# one_file = "C:\\Users\\yonym\\Desktop\\ThirdYear\\IR\\engineV1\\Data\\date=08-07-2020\\covid19_08-07.snappy.parquet"
-one_file = "C:\\Users\\Guyza\\OneDrive\\Desktop\\Information_Systems\\University\\Third_year\\Semester_E\\Information_Retrieval\\Search_Engine_Project\\Data\\Data\\date=07-27-2020\\covid19_07-27.snappy.parquet"
+one_file = "C:\\Users\\yonym\\Desktop\\ThirdYear\\IR\\engineV1\\Data\\date=07-27-2020\\covid19_07-27.snappy.parquet"
+# one_file = "C:\\Users\\Guyza\\OneDrive\\Desktop\\Information_Systems\\University\\Third_year\\Semester_E\\Information_Retrieval\\Search_Engine_Project\\Data\\Data\\date=07-27-2020\\covid19_07-27.snappy.parquet"
 # one_file = "C:\\Users\\Guyza\\OneDrive\\Desktop\\Information_Systems\\University\\Third_year\\Semester_E\\Information_Retrieval\\Search_Engine_Project\\Data\\Data\\date=07-21-2020\\covid19_07-21.snappy.parquet"
 corpus_path = "C:\\Users\\yonym\\Desktop\\ThirdYear\\IR\\engineV1\\Data\\"
 
@@ -30,7 +30,7 @@ def run_engine(corpus_path=None, output_path='', stemming=False):
     # parquet_documents_list = r.read_folder(config.get__corpusPath())
     # for parquet_file in parquet_documents_list:
     # documents_list = r.read_file(file_name=parquet_file)
-    # Iterate over every document in the file
+        # Iterate over every document in the file
     for idx, document in tqdm(enumerate(documents_list)):
         # parse the document
         parsed_document = p.parse_doc(document)
@@ -47,6 +47,7 @@ def run_engine(corpus_path=None, output_path='', stemming=False):
     indexer.save_postings()
 
     indexer.first()
+    indexer.switch_to_capitals()
     utils.save_obj(indexer.inverted_idx, "inverted_idx", config.get_out_path())
 
 
