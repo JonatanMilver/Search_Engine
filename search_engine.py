@@ -1,3 +1,5 @@
+import time
+
 from reader import ReadFile
 from configuration import ConfigClass
 from parser_module import Parse
@@ -46,7 +48,11 @@ def run_engine(corpus_path=None, output_path='', stemming=False):
     # utils.save_obj(indexer.postingDict, str(indexer.counter_of_postings), config.get_out_path())
     indexer.save_postings()
 
-    indexer.first()
+    # indexer.first()
+    print("starting to merge")
+    start = time.time()
+    indexer.mergeSortParallel(len(indexer.merged_dicts))
+    print(time.time()-start)
     indexer.switch_to_capitals()
     utils.save_obj(indexer.inverted_idx, "inverted_idx", config.get_out_path())
 
