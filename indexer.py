@@ -1,7 +1,11 @@
 import bisect
 from collections import Counter, OrderedDict
 import utils
-
+import ctypes
+import threading
+from concurrent.futures import ThreadPoolExecutor
+# from multiprocessing import Pool, Lock, Value
+import itertools
 
 class Indexer:
 
@@ -15,7 +19,7 @@ class Indexer:
 
         # postingDict[term] = [(d1.tweet_id, d1.number_of_appearances_in_doc, d1.locations of term in doc), (d2.tweet_id, d2.number_of_appearances_in_doc), ...]
         self.postingDict = {}
-        self.postingDict_size = 150000
+        self.postingDict_size = 30000
         self.counter_of_postings = 1
         self.global_capitals = {}
 
@@ -23,6 +27,7 @@ class Indexer:
         self.config = config
 
         self.merged_dicts = []
+        self.lock = threading.Lock()
 
     def add_new_doc(self, document):
         """
@@ -245,8 +250,159 @@ class Indexer:
                 i = i + 2
             return new_merged
 
+    def mergeSortParallel(self, n):
+        """
+        Attempt to get parallel mergesort faster in Windows.  There is
+        something wrong with having one Process instantiate another.
+        Looking at speedup.py, we get speedup by instantiating all the
+        processes at the same level.
+        """
+        numproc = n
+        print("started building threads...")
+        # instantiate a Pool of workers
+        # pool = Pool(initializer=self.init, initargs=(l,c), processes=numproc)
+        # pool = Pool(processes=numproc)
+        pool = ThreadPoolExecutor(max_workers=n)
+        print("finished building threads...")
+        # i.e., perform mergesort on the first 1/numproc of the lyst,
+        # the second 1/numproc of the lyst, etc.
+
+        # Now we have a bunch of sorted sublists.  while there is more than
+        # one, combine them with merge.
+        while len(self.merged_dicts) > 1:
+            to_append = None
+            if len(self.merged_dicts) % 2 == 1:
+                to_append = self.merged_dicts.pop()
+
+            # get sorted sublist pairs to send to merge
+            args = [(self.merged_dicts[i], self.merged_dicts[i + 1]) \
+                    for i in range(0, len(self.merged_dicts), 2)]
+            self.merged_dicts = list(pool.map(self.mergeWrap, args))
+            if to_append is not None:
+                self.merged_dicts.append(to_append)
+
+        # Since we start with numproc a power of two, there will always be an
+        # even number of sorted sublists to pair up, until there is only one.
+
+        return self.merged_dicts[0]
+
+    def mergeWrap(self, AandB):
+        a, b = AandB
+        return self.merge(a, b)
+
+    def merge(self, left, right):
+        """returns a merged and sorted version of the two already-sorted lists."""
+        ret = []
+        li = ri = 0
+
+        is_done_1 = False
+        is_done_2 = False
+        try:
+
+            d1 = utils.load_obj(left[li], '')
+            d2 = utils.load_obj(right[ri], '')
+        except:
+            print()
+
+        index_d1 = 0
+        index_d2 = 0
+
+        d1_keys = list(d1.keys())
+        d2_keys = list(d2.keys())
+
+        new_dict = OrderedDict()
+        while li < len(left) and ri < len(right):
+            if is_done_1:
+                d1 = utils.load_obj(left[li], '')
+                is_done_1 = False
+                index_d1 = 0
+            if is_done_2:
+                d2 = utils.load_obj(right[ri], '')
+                is_done_2 = False
+                index_d2 = 0
+
+            d1_keys = list(d1.keys())
+            d2_keys = list(d2.keys())
+
+            d1_key = d1_keys[index_d1]
+            d2_key = d2_keys[index_d2]
+
+            while index_d1 < len(d1) and index_d2 < len(d2):
+                d1_key = d1_keys[index_d1]
+                d2_key = d2_keys[index_d2]
+
+                if d1_key == d2_key:
+                    # merge posting list
+                    self.merge_terms_post_dict(new_dict, d1_key, d1, d2)
+                    self.inverted_idx[d1_key][1] = str(self.counter_of_postings)
+                    index_d1 += 1
+                    index_d2 += 1
+
+                elif d1_key < d2_key:
+                    new_dict[d1_key] = d1[d1_key]
+                    self.inverted_idx[d1_key][1] = str(self.counter_of_postings)
+                    index_d1 += 1
+                else:  # d2_key < d1_key:
+                    new_dict[d2_key] = d2[d2_key]
+                    self.inverted_idx[d2_key][1] = str(self.counter_of_postings)
+                    index_d2 += 1
+
+                # check if length of new disk equals the required value.
+                # if so, save it and append it to added_dicts
+                if len(new_dict) == self.postingDict_size:
+                    new_dict = self.save_new_dict(new_dict, ret)
+
+            if index_d1 >= len(d1):
+                is_done_1 = True
+                li += 1
+            if index_d2 >= len(d2):
+                is_done_2 = True
+                ri += 1
+
+        while index_d1 < len(d1):
+            d1_key = d1_keys[index_d1]
+            # add remaining terms to new dict
+            new_dict[d1_key] = d1[d1_key]
+            self.inverted_idx[d1_key][1] = str(self.counter_of_postings)
+            index_d1 += 1
+            # check if length of new disk equals the required value.
+            # if so, save it
+            if len(new_dict) == self.postingDict_size:
+                new_dict = self.save_new_dict(new_dict, ret)
+
+        if not is_done_1:
+            li += 1
+
+        while index_d2 < len(d2):
+            d2_key = d2_keys[index_d2]
+            new_dict[d2_key] = d2[d2_key]
+            self.inverted_idx[d2_key][1] = str(self.counter_of_postings)
+            index_d2 += 1
+            # add remaining terms to new dict.
+            # check if length of new disk equals the required value.
+            # if so, save it
+            if len(new_dict) == self.postingDict_size:
+                new_dict = self.save_new_dict(new_dict, ret)
+
+        if not is_done_2:
+            ri += 1
+
+        while li < len(left):
+            ret.append(left[li])
+            li += 1
+        while ri < len(right):
+            ret.append(right[ri])
+            ri += 1
+
+        # if new dict's length is larger than 0, save it
+        if len(new_dict) > 0:
+            new_dict = self.save_new_dict(new_dict, ret)
+
+        # new_merged.append(ret)
+        return ret
+
     def switch_to_capitals(self):
-        for posting in self.merged_dicts[0]:
+        for posting in self.merged_dicts:
             posting_file = utils.load_obj(posting, '')
             new_posting = {}
             changed = False
@@ -273,10 +429,14 @@ class Indexer:
 
 
     def save_new_dict(self, new_dict, added_dicts):
+        self.lock.acquire()
+
         utils.save_obj(new_dict, str(self.counter_of_postings), '')
         added_dicts.append(str(self.counter_of_postings))
         self.counter_of_postings += 1
         new_dict = OrderedDict()
+
+        self.lock.release()
         return new_dict
 
     def merge_terms_post_dict(self, add_to, term, d1, d2):
