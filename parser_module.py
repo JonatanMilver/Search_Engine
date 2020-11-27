@@ -5,7 +5,6 @@ from nltk.tokenize import word_tokenize
 from document import Document
 import re
 
-
 from stemmer import Stemmer
 
 
@@ -13,31 +12,32 @@ class Parse:
 
     def __init__(self, stemming=False):
         self.stop_words = stopwords.words('english')
-        self.stop_words.extend(['', ':',';', '.', ',', '(', ')', '[', ']', '{', '}',
-                                '', '``', 'rt', '“', '’', 'n\'t', '\'s', '\'ve', '\'m', '...', '\'\'', '\'d', '&', '\'ll', '\'re'])
+        self.stop_words.extend(
+            ['``', 'rt', r'“', r'’', r'n\'t', r'\'s', r'\'ve', r'\'m', '...', r'\'\'', r'\'d', '&', r'\'ll', r'\'re',
+             r' ', r'', r"", r"''", r'""', r'"', r"“", r"”", r"’", r"‘", r"``", r"'", r"`",
+             r'!', r'?', r',', r':', r';', r'(', r')', r'...', r'[', ']', r'{', '}' "'&'", '.', r'\'d'])
         self.stop_words_dict = dict.fromkeys(self.stop_words)
         self.text_tokens = None
         self.stemmer = None
         if stemming:
             self.stemmer = Stemmer()
         self.hashtag_split_pattern = re.compile(r'[a-zA-Z0-9](?:[a-z0-9]+|[A-Z0-9]*(?=[A-Z]|$))')
-        self.emoji_pattern = re.compile(pattern="["
-                                           u"\U0001F600-\U0001F64F"  # emoticons
-                                           u"\U0001F300-\U0001F5FF"  # symbols & pictographs
-                                           u"\U0001F680-\U0001F6FF"  # transport & map symbols
-                                           u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
-                                           "]+"
-                                        , flags=re.UNICODE)
-        # self.emoji_pattern = re.compile(pattern=
-        #                                 '(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])'
+        # self.emoji_pattern = re.compile(pattern="["
+        #                                    u"\U0001F600-\U0001F64F"  # emoticons
+        #                                    u"\U0001F300-\U0001F5FF"  # symbols & pictographs
+        #                                    u"\U0001F680-\U0001F6FF"  # transport & map symbols
+        #                                    u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
+        #                                    "]+"
         #                                 , flags=re.UNICODE)
+        self.take_off_non_latin = re.compile(
+            pattern=r'[^\x00-\x7F\x80-\xFF\u0100-\u017F\u0180-\u024F\u1E00-\u1EFF\u2019]')
         self.left_slash_pattern = re.compile(r'^-?[0-9]+/0*[1-9][0-9]*$')
         self.right_slash_pattern = re.compile(r'^-?[0-9]+\\0*[1-9][0-9]*$')
         self.days_dict = {"Sat": "saturday", "Sun": "sunday", "Mon": "monday", "Tue": "tuesday", "Wed": "wednsday",
-                     "Thu": "thursday", "Fri": "friday"}
+                          "Thu": "thursday", "Fri": "friday"}
         self.months_dict = {"Jul": ("july", "07"), "Aug": ("august", "08")}
 
-        self.kbm_shorts = {"k": None, "m": None, "b" : None, "K" : None, "M" : None, "B" : None}
+        self.kbm_shorts = {"k": None, "m": None, "b": None, "K": None, "M": None, "B": None}
 
     def parse_sentence(self, text):
         """
@@ -54,16 +54,14 @@ class Parse:
         empty_chunk = 0
         capital_letter_indexer = {}
         named_entities = set()
-        # right_side_slash_pat = re.compile(r'^-?[0-9]+/0*[1-9][0-9]*$')
-        # left_side_slash_pat = re.compile(r'^-?[0-9]+\\0*[1-9][0-9]*$')
 
         for idx, token in enumerate(self.text_tokens):
             if self.stemmer is not None:
                 token = self.stemmer.stem_term(token)
                 self.text_tokens[idx] = token
 
-            token = self.take_emoji_off(token) #this one is faster
-            self.text_tokens[idx] = token
+            # token = self.take_emoji_off(token) #this one is faster
+            # self.text_tokens[idx] = token
 
             if token == '' or token.lower() in self.stop_words_dict or (len(token) == 1 and ord(token) > 126):
                 continue
@@ -72,10 +70,7 @@ class Parse:
                 # chunks entities together.
                 entity_chunk += token + " "
                 empty_chunk += 1
-                # if token not in capital_letter_indexer:
-                #     capital_letter_indexer[token.lower()] = True
             else:
-                # capital_letter_indexer[token.lower()] = False
                 # add entity to the global counter and to the current words set
                 if entity_chunk != '':
                     named_entities.add(entity_chunk[:-1])
@@ -93,7 +88,7 @@ class Parse:
             elif token in ["%", "percent", "percentage"]:
                 self.handle_percent(tokenized_list, idx)
             elif token.isnumeric() or "," in token:
-                self.handle_number(tokenized_list, idx, token, capital_letter_indexer)
+                self.handle_number(tokenized_list, idx, token)
             elif '-' in token and len(token) > 1:
                 self.handle_dashes(tokenized_list, token)
             elif token == 'https' and idx + 2 < len(self.text_tokens):
@@ -103,9 +98,6 @@ class Parse:
                 self.text_tokens[idx + 2] = ''
             elif token[-1] in self.kbm_shorts and self.convert_string_to_float(token[:-1]):
                 tokenized_list.append(token.upper())
-                # tokenized_list.append(token.lower())
-            elif token == '$':
-                tokenized_list.append('dollar') #??????
             else:
                 self.append_to_tokenized(tokenized_list, capital_letter_indexer, token)
 
@@ -124,19 +116,11 @@ class Parse:
         tweet_date = doc_as_list[1]
         full_text = doc_as_list[2]
         url = self.json_convert_string_to_object(doc_as_list[3])
-        # url_indices = self.json_convert_string_to_object(doc_as_list[4])
         retweet_text = doc_as_list[5]
         retweet_url = self.json_convert_string_to_object(doc_as_list[6])
-        # retweet_url_indices = self.json_convert_string_to_object(doc_as_list[7])
         quote_text = doc_as_list[8]
         quote_url = self.json_convert_string_to_object(doc_as_list[9])
-        # quoted_indices = self.json_convert_string_to_object(doc_as_list[10])
-        # retweet_quoted_text = doc_as_list[11]
         retweet_quoted_url = self.json_convert_string_to_object(doc_as_list[12])
-        # retweet_quoted_indices = self.json_convert_string_to_object(doc_as_list[13])
-        capital_letter_indexer = {}
-        named_entities = set()
-
         dict_list = [url, retweet_url, quote_url, retweet_quoted_url]
         max_tf = 0
         # holds all URLs in one place
@@ -153,11 +137,12 @@ class Parse:
         # removes redundant short URLs from full_text
         if len(urls_set) > 0:
             full_text = self.clean_text_from_urls(full_text)
+        full_text = re.sub(self.take_off_non_latin, u'', full_text)
 
         tokenized_text, capital_letter_indexer, named_entities = self.parse_sentence(full_text)
 
         tokenized_text.extend([x.lower() for x in self.handle_dates(tweet_date)])
-
+        # expends the full text with tokenized urls
         self.expand_tokenized_with_url_set(tokenized_text, urls_set)
 
         term_dict = {}
@@ -181,7 +166,7 @@ class Parse:
         """
         merges text_tokens[idx] with text_tokens[idx+1] such that '#','exampleText' becomes '#exampleText'
         and inserts 'example' and 'Text' to text_tokens
-        :param text: list of all tokens
+        :param tokenized_list: list that the terms will be appended to
         :param idx: index of # in text_tokens
         :return:
         """
@@ -189,19 +174,17 @@ class Parse:
             splitted_hashtags = self.hashtag_split(self.text_tokens[idx + 1])
             tokenized_list.append((self.text_tokens[idx] + self.text_tokens[idx + 1]).lower())
             tokenized_list.extend([x.lower() for x in splitted_hashtags])
-            # text.pop(idx + 1)
             self.text_tokens[idx + 1] = ''
 
     def handle_tags(self, tokenized_list, idx):
         """
         merges text_tokens[idx] with text_tokens[idx+1] such that '@','example' becomes '@example'
-        :param text: list of tokenized words
+        :param tokenized_list: list of tokenized words
         :param idx: index of @ in text_tokens
         """
 
         if len(self.text_tokens) > idx + 1:
             tokenized_list.append((self.text_tokens[idx] + self.text_tokens[idx + 1]).lower())
-            # text.pop(idx + 1)
             self.text_tokens[idx + 1] = ''
 
     def hashtag_split(self, tag):
@@ -215,19 +198,17 @@ class Parse:
     def handle_percent(self, tokenized_list, idx):
         """
         merges text_tokens[idx] with text_tokens[idx-1] such that "%"/"percent"/"percentage",'50' becomes '50%'
-        :param text: list of tokenized words
+        :param tokenized_list: list of tokenized words
         :param idx: index of % in text_tokens
         :return:
         """
-
         if idx is not 0:
-            # if text_tokens[idx - 1].isnumeric():  # what if it is some kind of range?
             dash_idx = self.text_tokens[idx - 1].find('-')
             if self.is_fraction(self.text_tokens[idx - 1]):
                 number = self.text_tokens[idx - 1]
             else:
                 number = self.convert_string_to_float(self.text_tokens[idx - 1])
-            if number is not None:  # what if it is some kind of range?
+            if number is not None:
                 tokenized_list.append(self.text_tokens[idx - 1].lower() + "%")
             elif dash_idx != -1:
                 left = self.text_tokens[idx - 1][:dash_idx]
@@ -235,17 +216,16 @@ class Parse:
                 if left.isnumeric() and right.isnumeric():
                     tokenized_list.append(self.text_tokens[idx - 1].lower() + "%")
 
-    def handle_number(self, tokenized_list, idx, token, capital_letter_indexer):
+    def handle_number(self, tokenized_list, idx, token):
         """
         converts all numbers to single format:
         2 -> 2
         68,800 -> 68.8K
         123,456,678 -> 123.456M
         3.5 Billion -> 3.5B
-        :param text: list of tokenized words
+        :param tokenized_list: list of tokenized words
         :param idx: index of % in text_tokens
         :param token: text_tokens[idx]
-        :param tokenized_list: tokenized_list
         :return:
         """
         number = self.convert_string_to_float(token)
@@ -297,10 +277,6 @@ class Parse:
         else:
             number = str(number)
 
-        # if len(kmb) == 0:
-        #     capital_letter_indexer[number] = False
-        # else:
-        #     capital_letter_indexer[number+kmb] = True
         tokenized_list.append(number + kmb)
 
     def convert_string_to_float(self, s):
@@ -346,31 +322,13 @@ class Parse:
         for url in urls_set:
             to_extend.extend(self.split_url(url))
 
-    # def take_off_emoji(self, token):
-    #     """
-    #     takes unnecessary emojies off the text.
-    #     :param token: string
-    #     :return: string without the emojies
-    #     """
-    #     if len(token) == 1 and ord(token) > 126:
-    #         return ''
-    #     for idx in range(len(token)):
-    #         if 0 <= ord(token[idx]) < 126:
-    #             token = token[idx:]
-    #             break
-    #     for idx in range(len(token) - 1, 0, -1):
-    #         if 0 <= ord(token[idx]) < 126:
-    #             token = token[:idx + 1]
-    #             break
-    #
-    #     return token
-
     def take_emoji_off(self, token):
         return self.emoji_pattern.sub(r'', token)
 
     def json_convert_string_to_object(self, s):
         """
         converts a given string to its corresponding object according to json
+        used specifically to dictionaries
         :param s: string to convert
         :return: Object / None
         """
@@ -392,6 +350,7 @@ class Parse:
         """
         Adds token's words separated to the tokenized list.
         e.g: Word-word will be handled as [Word,word, Word-word]
+        :param tokenized_list: list of tokenized words
         :param token: String to separate
         :return: None
         """
@@ -404,15 +363,14 @@ class Parse:
         """
         takes care of strings representing fractions
         if there is a number before the fraction, it concats both tokens into one.
-        :param text:
-        :param tokenized_list:
-        :param token:
-        :param idx:
+        :param tokenized_list: list of tokenized words
+        :param token: single word that would be handled
+        :param idx: the index of the word in text_tokens
         :return:
         """
         slash_idx = token.find('\\')
         if slash_idx != -1:
-            token = token[:slash_idx] + '/' + token[slash_idx+1:]
+            token = token[:slash_idx] + '/' + token[slash_idx + 1:]
         frac = str(Fraction(token))
         if idx == 0 and frac != token:
             tokenized_list.append(frac.lower())
@@ -433,10 +391,8 @@ class Parse:
         :param token: string
         :return: boolean
         """
-        # return re.match(r'^-?[0-9]+/0*[1-9][0-9]*$', token) is not None or \
-        #        re.match(r'^-?[0-9]+\\0*[1-9][0-9]*$', token) is not None
         return re.match(self.right_slash_pattern, token) is not None or \
-               re.match(self.left_slash_pattern, token) is not None
+            re.match(self.left_slash_pattern, token) is not None
 
     def handle_dates(self, tweet_date):
         """
@@ -452,6 +408,13 @@ class Parse:
         return [day_txt, month_txt, date_num, splitted_date[3]]
 
     def append_to_tokenized(self, tokenized_list, capital_letters, token):
+        """
+        appends given token to tokenized list and to capital_letters dictionary according to it's first letter.
+        :param tokenized_list: list of tokenized words
+        :param capital_letters: dictionary containing words and boolean value.
+        :param token: given word.
+        :return:
+        """
         if len(token) > 0 and token[0].isupper():
             if token not in capital_letters:
                 capital_letters[token.lower()] = True
@@ -459,4 +422,3 @@ class Parse:
             capital_letters[token.lower()] = False
         if token.lower() not in self.stop_words_dict:
             tokenized_list.append(token.lower())
-
