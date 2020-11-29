@@ -20,13 +20,14 @@ class Indexer:
         # doc1 -> ('tweet_id', and more details..)
         self.posting_list = []
         self.posting_dict = {}
-        self.postingDict_size = 250000
+        self.postingDict_size = 200000
         self.counter_of_postings = 0
         self.global_capitals = {}
         self.glove_dict = glove_dict
         self.entities_dict = Counter()
         self.config = config
-
+        self.doc_posting_counter = 0
+        self.doc_posting_dict = {}
         self.merged_dicts = []
         self.lock = threading.Lock()
 
@@ -56,10 +57,14 @@ class Indexer:
                 document_vec += self.glove_dict[term]
         document_vec /= len(document_dictionary)
         self.document_dict[document.tweet_id] = (
-            document_vec, # numpy array of size 25 which
+            # document_vec, # numpy array of size 25 which
+            document_vec,
             # represents the document in 25 dimensional space(GloVe)
-            document.doc_length # total number of words in tweet
+            document.doc_length  # total number of words in tweet
         )
+        # self.doc_posting_dict[document.tweet_id] = (document_vec, document.doc_length)
+        # if len(self.doc_posting_dict) == 100000: #TODO should check the number
+        #     self.save_doc_posting()
         # Go over each term in the doc
         for term in document_dictionary.keys():
             try:
@@ -439,8 +444,23 @@ class Indexer:
                         indexes_of_the_indexes_to_increase.append(idx)
 
                 merged_tuple = self.merge_terms_into_one(tuples_to_merge)
-                building_list.append(merged_tuple)
-                self.inverted_idx[merged_tuple[0]][1] = str(self.counter_of_postings)
+                appended_term = merged_tuple[0]
+                should_append = True
+                # if it is a named entity and it exists in less than 2 tweets, erase this term.
+                if appended_term in self.entities_dict and self.entities_dict[appended_term] < 2:
+                    should_append = False
+                    # del self.inverted_idx[appended_term]
+                    self.inverted_idx.pop(appended_term, None)
+                # update terms with capital letters
+                if appended_term in self.global_capitals and self.global_capitals[appended_term]:
+                    merged_tuple = (appended_term.upper(), merged_tuple[1])
+                    inverted_val = self.inverted_idx[appended_term]
+                    # del self.inverted_idx[appended_term]
+                    self.inverted_idx.pop(appended_term, None)
+                    self.inverted_idx[appended_term.upper()] = inverted_val
+                if should_append:
+                    building_list.append(merged_tuple)
+                    self.inverted_idx[merged_tuple[0]][1] = str(self.counter_of_postings)
 
                 # increase the indices that the tuple at the specific location have been inserted to the new posting
                 for idx in indexes_of_the_indexes_to_increase:
@@ -529,7 +549,7 @@ class Indexer:
         """
         # TODO check how we should change the number of maximum threads
         # numproc = 300 if len(self.merged_dicts) > 300 else len(self.merged_dicts)
-        numproc = len(self.merged_dicts) // 3
+        numproc = len(self.merged_dicts) // 3 if len(self.merged_dicts) // 3 > 0 else 1
         pool = ThreadPoolExecutor(max_workers=numproc)
         pool.map(self.capital_per_posting, self.merged_dicts)
         self.update_inverted()
@@ -624,3 +644,6 @@ class Indexer:
                 inverted_val = self.inverted_idx[term]
                 del self.inverted_idx[term]
                 self.inverted_idx[term.upper()] = inverted_val
+
+    def delete_dict_after_saving(self):
+        del self.document_dict

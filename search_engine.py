@@ -1,5 +1,4 @@
 import time
-import pandas as pd
 from reader import ReadFile
 from configuration import ConfigClass
 from parser_module import Parse
@@ -18,12 +17,19 @@ corpus_path = "C:\\Users\\yonym\\Desktop\\ThirdYear\\IR\\engineV1\\Data\\"
 GLOVE_PATH_SERVER = '../../../../glove.twitter.27B.25d.txt'
 GLOVE_PATH_LOCAL = 'glove.twitter.27B.25d.txt'
 glove_dict = {}
+
+
+# def load_glove_dict():
+#     global glove_dict
 with open(GLOVE_PATH_LOCAL, 'r', encoding='utf-8') as f:
     for line in tqdm(f):
         values = line.split()
         word = values[0]
         vector = np.asarray(values[1:], "float32")
         glove_dict[word] = vector
+
+
+# load_glove_dict()
 
 
 def run_engine(corpus_path=None, output_path='', stemming=False):
@@ -39,12 +45,11 @@ def run_engine(corpus_path=None, output_path='', stemming=False):
     r = ReadFile(corpus_path=config.get__corpusPath())
     p = Parse(config.toStem)
     indexer = Indexer(config, glove_dict)
-
     # documents_list = r.read_file(file_name=one_file)
     parquet_documents_list = r.read_folder(config.get__corpusPath())
     for parquet_file in parquet_documents_list:
         documents_list = r.read_file(file_name=parquet_file)
-            # Iterate over every document in the file
+                # Iterate over every document in the file
         for idx, document in tqdm(enumerate(documents_list)):
             # parse the document
             parsed_document = p.parse_doc(document)
@@ -57,14 +62,15 @@ def run_engine(corpus_path=None, output_path='', stemming=False):
     # saves last posting file after indexer has done adding documents.
     indexer.save_postings()
     utils.save_dict(indexer.document_dict, "documents_dict", config.get_out_path())
+    indexer.delete_dict_after_saving()
     start = time.time()
     # merges posting files.
     indexer.merge_chunks()
     print(time.time() - start)
-    start = time.time()
-    # updates postings and invereted idx with capitals and entities.
-    indexer.switch_to_capitals()
-    print(time.time() - start)
+    # start = time.time()
+    # # updates postings and invereted idx with capitals and entities.
+    # indexer.switch_to_capitals()
+    # print(time.time() - start)
 
     return number_of_documents, sum_of_doc_lengths/number_of_documents
 
@@ -76,7 +82,7 @@ def load_index(out_path=''):
     return inverted_index, documents_dict
 
 
-def search_and_rank_query(query, inverted_index, document_dict, k, num_of_docs, avg_length_per_doc):
+def search_and_rank_query(query, inverted_index, document_dict, k, num_of_docs=10000000, avg_length_per_doc=22.5):
     p = Parse()
     query_as_list = p.parse_sentence(query)
     searcher = Searcher(inverted_index, document_dict, num_of_docs, avg_length_per_doc, glove_dict)
@@ -87,12 +93,17 @@ def search_and_rank_query(query, inverted_index, document_dict, k, num_of_docs, 
 
 def main1():
     num_of_docs, avg_length_per_doc = run_engine()
+    s= time.time()
+    inverted_index, document_dict = load_index()
+    print(time.time() - s)
     query = input("Please enter a query: ")
     k = int(input("Please enter number of docs to retrieve: "))
-    inverted_index, document_dict = load_index()
     tweet_url = 'http://twitter.com/anyuser/status/'
+    start = time.time()
     for doc_tuple in search_and_rank_query(query, inverted_index, document_dict, k, num_of_docs, avg_length_per_doc):
+    # for doc_tuple in search_and_rank_query(query, inverted_index, document_dict, k):
         print('tweet id: {}, score (unique common words with query): {}'.format(tweet_url+doc_tuple[1], doc_tuple[0]))
+    print(time.time() - start)
 
 
 def main(corpus_path=None, output_path=None, stemming=False, queries=[], num_docs_to_retrieve=0):
