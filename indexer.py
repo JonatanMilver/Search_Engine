@@ -6,10 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 
 
-
-
 class Indexer:
-
     def __init__(self, config, glove_dict):
         # given a term, returns the number of doc/tweets in which he is in
         # term -> df, posting_idx
@@ -20,7 +17,7 @@ class Indexer:
         # doc1 -> ('tweet_id', and more details..)
         self.posting_list = []
         self.posting_dict = {}
-        self.postingDict_size = 250000
+        self.postingDict_size = 200000
         self.counter_of_postings = 0
         self.global_capitals = {}
         self.glove_dict = glove_dict
@@ -56,9 +53,9 @@ class Indexer:
                 document_vec += self.glove_dict[term]
         document_vec /= len(document_dictionary)
         self.document_dict[document.tweet_id] = (
-            document_vec, # numpy array of size 25 which
+            document_vec,  # numpy array of size 25 which
             # represents the document in 25 dimensional space(GloVe)
-            document.doc_length # total number of words in tweet
+            document.doc_length  # total number of words in tweet
         )
         # Go over each term in the doc
         for term in document_dictionary.keys():
@@ -529,7 +526,7 @@ class Indexer:
         """
         # TODO check how we should change the number of maximum threads
         # numproc = 300 if len(self.merged_dicts) > 300 else len(self.merged_dicts)
-        numproc = len(self.merged_dicts) // 3
+        numproc = len(self.merged_dicts) // 3 if len(self.merged_dicts) // 3 > 0 else 1
         pool = ThreadPoolExecutor(max_workers=numproc)
         pool.map(self.capital_per_posting, self.merged_dicts)
         self.update_inverted()

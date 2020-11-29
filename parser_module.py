@@ -10,12 +10,13 @@ from stemmer import Stemmer
 
 class Parse:
 
-    def __init__(self, stemming=False):
+    def __init__(self, stemming):
         self.stop_words = stopwords.words('english')
         self.stop_words.extend(
-            ['``', 'rt', r'“', r'’', r'n\'t', r'\'s', r'\'ve', r'\'m', '...', r'\'\'', r'\'d', '&', r'\'ll', r'\'re',
-             r' ', r'', r"", r"''", r'""', r'"', r"“", r"”", r"’", r"‘", r"``", r"'", r"`",
-             r'!', r'?', r',', r':', r';', r'(', r')', r'...', r'[', ']', r'{', '}' "'&'", '.', r'\'d'])
+            ['rt', '“', r'’', r'n\'t', 'n\'t', '\'s', r'\'s', r'\'ve', r'\'m', '...', r'\'\'', r'\'d', '&', r'\'ll', r'\'re',
+             r' ', r'', r"", r"''", r'""', r'"', r"“", "”", r"’", "‘", r"``", '``', r"'", r"`",
+             r'!', r'?', r',', r':', r';', r'(', r')', r'...', r'[', ']', r'{', '}' "'&'", '.', r'\'d',
+             '-', '--'])
         self.stop_words_dict = dict.fromkeys(self.stop_words)
         self.text_tokens = None
         self.stemmer = None
@@ -56,9 +57,9 @@ class Parse:
         named_entities = set()
 
         for idx, token in enumerate(self.text_tokens):
-            if self.stemmer is not None:
-                token = self.stemmer.stem_term(token)
-                self.text_tokens[idx] = token
+            # if self.stemmer is not None:
+            #     token = self.stemmer.stem_term(token)
+            #     self.text_tokens[idx] = token
 
             # token = self.take_emoji_off(token) #this one is faster
             # self.text_tokens[idx] = token
@@ -99,6 +100,9 @@ class Parse:
             elif token[-1] in self.kbm_shorts and self.convert_string_to_float(token[:-1]):
                 tokenized_list.append(token.upper())
             else:
+                if self.stemmer is not None:
+                    token = self.stemmer.stem_term(token)
+                    # self.text_tokens[idx] = token
                 self.append_to_tokenized(tokenized_list, capital_letter_indexer, token)
 
         # appends named entities to the tokenized list

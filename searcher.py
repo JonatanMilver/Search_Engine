@@ -4,6 +4,7 @@ from parser_module import Parse
 from ranker import Ranker
 import numpy as np
 import utils
+from collections import Counter
 
 
 class Searcher:
@@ -12,7 +13,7 @@ class Searcher:
         """
         :param inverted_index: dictionary of inverted index
         """
-        self.parser = Parse()
+        self.parser = Parse(False)
         self.ranker = Ranker(avg_length_per_doc)
         self.inverted_index = inverted_index
         self.document_dict = document_dict
@@ -62,7 +63,15 @@ class Searcher:
 
             except:
                 print('term {} not found in inverted index'.format(term))
+
+
         query_glove_vec /= len(query)
+
+        p = 0.4
+        min_num_of_words_to_relevent = int(len(query) * p)
+        pre_doc_dict = {}
+        pre_doc_dict_counter = Counter()
+
         relevant_docs = {}
         for term_to_docs in self.term_to_doclist.items():
             term = term_to_docs[0]
@@ -74,21 +83,31 @@ class Searcher:
                 if doc_list is not None:
                     for doc_tuple in doc_list:
                         tweet_id = doc_tuple[0]
-                        if tweet_id not in relevant_docs:
+                        pre_doc_dict_counter[tweet_id] += 1
+                        # if tweet_id not in relevant_docs:
+                        if tweet_id not in pre_doc_dict:
                             # example - > tf_idf_vec
                             # [[tf1, tf2...]
                             #  [idf1, idf2...]]
                             tf_idf_vec = np.zeros(shape=(2, len(query)))
-                            relevant_docs[tweet_id] = (tf_idf_vec, self.document_dict[tweet_id][1],
+                            # relevant_docs[tweet_id] = (tf_idf_vec, self.document_dict[tweet_id][1],
+                            #                            self.document_dict[tweet_id][0])
+                            pre_doc_dict[tweet_id] = (tf_idf_vec, self.document_dict[tweet_id][1],
                                                        self.document_dict[tweet_id][0])
 
-                        vec = relevant_docs[tweet_id][0]
+
+                        # vec = relevant_docs[tweet_id][0]
+                        vec = pre_doc_dict[tweet_id][0]
                         tf = self.calculate_tf(doc_tuple)
                         for index in term_indices:
                             vec[0, index] = tf
                         for idx, q_term in enumerate(query):
                             vec[1, idx] = qterm_to_idf[q_term]
                             query_vec[0, idx] = len(self.term_to_doclist[q_term][0]) / len(query)
+
+                        if pre_doc_dict_counter[tweet_id] >= min_num_of_words_to_relevent:
+                            relevant_docs[tweet_id] = pre_doc_dict[tweet_id]
+
             except:
                 print('term {} not found in posting'.format(term))
 
