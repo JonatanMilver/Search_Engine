@@ -6,12 +6,14 @@ from indexer import Indexer
 from searcher import Searcher
 import utils
 import numpy as np
+import matplotlib.pyplot as plt
 
 from tqdm import tqdm
 
-one_file = "C:\\Users\\yonym\\Desktop\\ThirdYear\\IR\\engineV1\\Data\\date=07-27-2020\\covid19_07-27.snappy.parquet"
-# one_file = "C:\\Users\\Guyza\\OneDrive\\Desktop\\Information_Systems\\University\\Third_year\\Semester_E\\Information_Retrieval\\Search_Engine_Project\\Data\\Data\\date=07-27-2020\\covid19_07-27.snappy.parquet"
+# one_file = "C:\\Users\\yonym\\Desktop\\ThirdYear\\IR\\engineV1\\Data\\date=07-27-2020\\covid19_07-27.snappy.parquet"
+one_file = "C:\\Users\\Guyza\\OneDrive\\Desktop\\Information_Systems\\University\\Third_year\\Semester_E\\Information_Retrieval\\Search_Engine_Project\\Data\\Data\\date=07-27-2020\\covid19_07-27.snappy.parquet"
 # one_file = "C:\\Users\\Guyza\\OneDrive\\Desktop\\Information_Systems\\University\\Third_year\\Semester_E\\Information_Retrieval\\Search_Engine_Project\\Data\\Data\\date=07-21-2020\\covid19_07-21.snappy.parquet"
+# one_file = "C:\\Users\\Guyza\\OneDrive\\Desktop\\Information_Systems\\University\\Third_year\\Semester_E\\Information_Retrieval\\Search_Engine_Project\\Data\\Data\\date=07-16-2020\\covid19_07-16.snappy.parquet"
 corpus_path = "C:\\Users\\yonym\\Desktop\\ThirdYear\\IR\\engineV1\\Data\\"
 
 GLOVE_PATH_SERVER = '../../../../glove.twitter.27B.25d.txt'
@@ -45,6 +47,7 @@ def run_engine(corpus_path=None, output_path='', stemming=False):
     r = ReadFile(corpus_path=config.get__corpusPath())
     p = Parse(config.toStem)
     indexer = Indexer(config, glove_dict)
+
     # documents_list = r.read_file(file_name=one_file)
     parquet_documents_list = r.read_folder(config.get__corpusPath())
     for parquet_file in parquet_documents_list:
@@ -84,6 +87,7 @@ def load_index(out_path=''):
 
 def search_and_rank_query(query, inverted_index, document_dict, k, num_of_docs=10000000, avg_length_per_doc=22.5):
     p = Parse()
+
     query_as_list = p.parse_sentence(query)
     searcher = Searcher(inverted_index, document_dict, num_of_docs, avg_length_per_doc, glove_dict)
     relevant_docs, query_glove_vec, query_vec = searcher.relevant_docs_from_posting(query_as_list[0])

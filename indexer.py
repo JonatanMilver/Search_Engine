@@ -6,10 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 
 
-
-
 class Indexer:
-
     def __init__(self, config, glove_dict):
         # given a term, returns the number of doc/tweets in which he is in
         # term -> df, posting_idx
@@ -57,6 +54,7 @@ class Indexer:
                 document_vec += self.glove_dict[term]
         document_vec /= len(document_dictionary)
         self.document_dict[document.tweet_id] = (
+
             # document_vec, # numpy array of size 25 which
             document_vec,
             # represents the document in 25 dimensional space(GloVe)
