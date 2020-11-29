@@ -1,5 +1,4 @@
 import math
-
 from parser_module import Parse
 from ranker import Ranker
 import numpy as np
