@@ -18,15 +18,19 @@ class Parse:
              r'!', r'?', r',', r':', r';', r'(', r')', r'...', r'[', ']', r'{', '}' "'&'", '.', r'\'d',
              '-', '--'])
         self.stop_words_dict = dict.fromkeys(self.stop_words)
+
         self.text_tokens = None
+
         self.stemmer = None
         if stemming:
             self.stemmer = Stemmer()
+
         self.hashtag_split_pattern = re.compile(r'[a-zA-Z0-9](?:[a-z0-9]+|[A-Z0-9]*(?=[A-Z]|$))')
         self.take_off_non_latin = re.compile(
             pattern=r'[^\x00-\x7F\x80-\xFF\u0100-\u017F\u0180-\u024F\u1E00-\u1EFF\u2019]')
         self.left_slash_pattern = re.compile(r'^-?[0-9]+/0*[1-9][0-9]*$')
         self.right_slash_pattern = re.compile(r'^-?[0-9]+\\0*[1-9][0-9]*$')
+
         self.days_dict = {"Sat": "saturday", "Sun": "sunday", "Mon": "monday", "Tue": "tuesday", "Wed": "wednsday",
                           "Thu": "thursday", "Fri": "friday"}
         self.months_dict = {"Jul": ("july", "07"), "Aug": ("august", "08")}
@@ -57,7 +61,7 @@ class Parse:
             # token = self.take_emoji_off(token) #this one is faster
             # self.text_tokens[idx] = token
 
-            if token == '' or token.lower() in self.stop_words_dict or (len(token) == 1 and ord(token) > 126):
+            if token.lower() in self.stop_words_dict or (len(token) == 1 and ord(token) > 126):
                 continue
 
             if len(token) > 0 and token[0].isupper():
@@ -120,6 +124,12 @@ class Parse:
         retweet_quoted_url = self.json_convert_string_to_object(doc_as_list[12])
         dict_list = [url, retweet_url, quote_url, retweet_quoted_url]
         max_tf = 0
+
+
+        # if tweet_id == '123456789':
+        #     print()
+
+
         # holds all URLs in one place
         urls_set = set()
         for d in dict_list:

@@ -90,7 +90,8 @@ class Indexer:
                     self.posting_dict[term] = len(self.posting_list) - 1
                 else:
                     tuple_idx = self.posting_dict[term]
-                    bisect.insort(self.posting_list[tuple_idx][1], insert_tuple)
+                    # bisect.insort(self.posting_list[tuple_idx][1], insert_tuple)
+                    self.posting_list[tuple_idx][1].append(insert_tuple)
 
                 # check if posting_dict is full
                 if len(self.posting_list) == self.postingDict_size:

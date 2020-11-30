@@ -11,4 +11,6 @@ class Stemmer:
         :param token: string of a token
         :return: stemmed token
         """
-        return self.stemmer.stem(token)
+        t = self.stemmer.stem(token)
+        return t
+        # return self.stemmer.stem(token)
