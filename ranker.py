@@ -3,6 +3,7 @@ import numpy as np
 from numpy.linalg import norm
 import utils
 
+
 class Ranker:
     def __init__(self, avg_length, document_dict, config):
         self.avg_length_per_doc = avg_length
@@ -28,7 +29,8 @@ class Ranker:
             doc_length = tuple_vec_doclength[1]
             # glove_vec = tuple_vec_doclength[2]
             glove_vec = self.loaded_doc_postings[self.document_dict[tweet_id]][tweet_id]
-            tweet_tuple = (self.calc_score(bm25_vec, doc_length, glove_vec, query_glove_vec, query_tf_idf_vec, tweet_id), tweet_id)
+            tweet_tuple = (
+            self.calc_score(bm25_vec, doc_length, glove_vec, query_glove_vec, query_tf_idf_vec, tweet_id), tweet_id)
             bisect.insort(ret, tweet_tuple)
 
         return ret
@@ -58,13 +60,21 @@ class Ranker:
         :param doc_length:
         :return: calculated score of similarity between the represented tweet and the query
         """
-        bm25_score = self.calc_BM25(bm25_vec, doc_length)
-        glove_cosine = self.cosine(glove_vec, query_glove_vec)
-        word_cosine = self.cosine(bm25_vec[0]*bm25_vec[1], querty_tf_idf_vec[0]*querty_tf_idf_vec[1])
-        score = word_cosine # * 0.8 + glove_cosine * 0.2 # * 0.7 + bm25_score * 0.15 + glove_cosine * 0.15
+        w_cos_weight = 0.9
+        bm25_weight = 0.05
+        glove_weight = 0.05
+
+        word_cosine = w_cos_weight * self.cosine(bm25_vec[0] * bm25_vec[1], querty_tf_idf_vec[0] * querty_tf_idf_vec[1])
+        bm25_score = bm25_weight * self.calc_BM25(bm25_vec, doc_length)
+        glove_cosine = glove_weight * self.cosine(glove_vec, query_glove_vec)
+
+        score = word_cosine + glove_cosine + bm25_score
+
         # if score > 0.85:
         # print("{} : word cosine: {} , glove cosine: {}, total score {}".format(tweet_id,word_cosine,glove_cosine, score))
+
         return score
+
     def calc_BM25(self, vec, doc_length):
         # BM25 score calculation
         score = 0
