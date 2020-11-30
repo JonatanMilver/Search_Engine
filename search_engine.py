@@ -21,7 +21,7 @@ glove_dict = {}
 
 # def load_glove_dict():
 #     global glove_dict
-with open(GLOVE_PATH_SERVER, 'r', encoding='utf-8') as f:
+with open(GLOVE_PATH_LOCAL, 'r', encoding='utf-8') as f:
     for line in tqdm(f):
         values = line.split()
         word = values[0]
@@ -45,32 +45,32 @@ def run_engine(config):
     r = ReadFile(corpus_path=config.get__corpusPath())
     p = Parse(config.toStem)
     indexer = Indexer(config, glove_dict)
-    # try:
-    #     documents_list = r.read_file(file_name=config.get__corpusPath())
-    # except:
-    #     raise Exception("Failed in reading the parquet files")
     try:
-        parquet_documents_list = r.read_folder(config.get__corpusPath())
+        documents_list = r.read_file(file_name=config.get__corpusPath())
     except:
-        raise Exception("Reading paths from folder failed")
-    for parquet_file in parquet_documents_list:
-        try:
-            documents_list = r.read_file(file_name=parquet_file)
-        except:
-            raise Exception("Reading file {} failed".format(parquet_file))
+        raise Exception("Failed in reading the parquet files")
+    # try:
+    #     parquet_documents_list = r.read_folder(config.get__corpusPath())
+    # except:
+    #     raise Exception("Reading paths from folder failed")
+    # for parquet_file in parquet_documents_list:
+    #     try:
+    #         documents_list = r.read_file(file_name=parquet_file)
+    #     except:
+    #         raise Exception("Reading file {} failed".format(parquet_file))
         # Iterate over every document in the file
-        for idx, document in tqdm(enumerate(documents_list)):
-            # parse the document
-            parsed_document = p.parse_doc(document)
+    for idx, document in tqdm(enumerate(documents_list)):
+        # parse the document
+        parsed_document = p.parse_doc(document)
 
-            number_of_documents += 1
-            sum_of_doc_lengths += parsed_document.doc_length
-    
-            # index the document data
-            try:
-                indexer.add_new_doc(parsed_document)
-            except:
-                raise Exception("Indexing failed")
+        number_of_documents += 1
+        sum_of_doc_lengths += parsed_document.doc_length
+
+        # index the document data
+        try:
+            indexer.add_new_doc(parsed_document)
+        except:
+            raise Exception("Indexing failed")
 
     print('Finished parsing and indexing. Starting to export files')
 
@@ -138,7 +138,7 @@ def main(corpus_path=None, output_path='', stemming=False, queries=None, num_doc
             query_list = handle_queries(queries)
         except:
             raise Exception('Handle queries failed')
-        # k = num_docs_to_retrieve
+
         try:
             inverted_index, document_dict = load_index(output_path)
         except:
