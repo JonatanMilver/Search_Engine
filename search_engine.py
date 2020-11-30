@@ -45,32 +45,21 @@ def run_engine(config):
     r = ReadFile(corpus_path=config.get__corpusPath())
     p = Parse(config.toStem)
     indexer = Indexer(config, glove_dict)
-    try:
-        documents_list = r.read_file(file_name=config.get__corpusPath())
-    except:
-        raise Exception("Failed in reading the parquet files")
-    # try:
-    #     parquet_documents_list = r.read_folder(config.get__corpusPath())
-    # except:
-    #     raise Exception("Reading paths from folder failed")
-    # for parquet_file in parquet_documents_list:
-    #     try:
-    #         documents_list = r.read_file(file_name=parquet_file)
-    #     except:
-    #         raise Exception("Reading file {} failed".format(parquet_file))
+    documents_list = r.read_file(file_name=config.get__corpusPath())
+    parquet_documents_list = r.read_folder(config.get__corpusPath())
+    for parquet_file in parquet_documents_list:
+        documents_list = r.read_file(file_name=parquet_file)
         # Iterate over every document in the file
-    for idx, document in tqdm(enumerate(documents_list)):
-        # parse the document
-        parsed_document = p.parse_doc(document)
+        for idx, document in tqdm(enumerate(documents_list)):
+            # parse the document
+            parsed_document = p.parse_doc(document)
+            if parsed_document is None:
+                continue
+            number_of_documents += 1
+            sum_of_doc_lengths += parsed_document.doc_length
 
-        number_of_documents += 1
-        sum_of_doc_lengths += parsed_document.doc_length
-
-        # index the document data
-        try:
+            # index the document data
             indexer.add_new_doc(parsed_document)
-        except:
-            raise Exception("Indexing failed")
 
     print('Finished parsing and indexing. Starting to export files')
 
@@ -86,7 +75,7 @@ def run_engine(config):
     # merges posting files.
     indexer.merge_chunks()
     # print(time.time() - start)
-    utils.save_dict(indexer.inverted_idx, "inverted_idx",config.get_out_path())
+    utils.save_dict(indexer.inverted_idx, "inverted_idx", config.get_out_path())
 
     # start = time.time()
     # # updates postings and invereted idx with capitals and entities.
@@ -114,19 +103,19 @@ def search_and_rank_query(query, inverted_index, document_dict, k, num_of_docs, 
     return searcher.ranker.retrieve_top_k(ranked_docs, k)
 
 
-def main1():
-    num_of_docs, avg_length_per_doc = run_engine(corpus_path=None, output_path='', stemming=False)
-    s= time.time()
-    inverted_index, document_dict = load_index()
-    print(time.time() - s)
-    query = input("Please enter a query: ")
-    k = int(input("Please enter number of docs to retrieve: "))
-    tweet_url = 'http://twitter.com/anyuser/status/'
-    start = time.time()
-    # for doc_tuple in search_and_rank_query(query, inverted_index, document_dict, k):
-    for doc_tuple in search_and_rank_query(query, inverted_index, document_dict, k, num_of_docs=num_of_docs, avg_length_per_doc=avg_length_per_doc):
-        print('tweet id: {}, score (unique common words with query): {}'.format(tweet_url+doc_tuple[1], doc_tuple[0]))
-    print(time.time() - start)
+# def main1():
+#     num_of_docs, avg_length_per_doc = run_engine(corpus_path=None, output_path='', stemming=False)
+#     s= time.time()
+#     inverted_index, document_dict = load_index()
+#     print(time.time() - s)
+#     query = input("Please enter a query: ")
+#     k = int(input("Please enter number of docs to retrieve: "))
+#     tweet_url = 'http://twitter.com/anyuser/status/'
+#     start = time.time()
+#     # for doc_tuple in search_and_rank_query(query, inverted_index, document_dict, k):
+#     for doc_tuple in search_and_rank_query(query, inverted_index, document_dict, k, num_of_docs=num_of_docs, avg_length_per_doc=avg_length_per_doc):
+#         print('tweet id: {}, score (unique common words with query): {}'.format(tweet_url+doc_tuple[1], doc_tuple[0]))
+#     print(time.time() - start)
 
 
 def main(corpus_path=None, output_path='', stemming=False, queries=None, num_docs_to_retrieve=1):
@@ -134,23 +123,14 @@ def main(corpus_path=None, output_path='', stemming=False, queries=None, num_doc
         config = ConfigClass(corpus_path, output_path, stemming)
         num_of_docs, avg_length_per_doc = run_engine(config)
         # query_list = queries
-        try:
-            query_list = handle_queries(queries)
-        except:
-            raise Exception('Handle queries failed')
+        query_list = handle_queries(queries)
+        inverted_index, document_dict = load_index(output_path)
+        tweet_url = 'http://twitter.com/anyuser/status/'
+        for idx, query in enumerate(query_list):
+            print("query {}:".format(idx))
+            for doc_tuple in search_and_rank_query(query, inverted_index, document_dict, num_docs_to_retrieve, num_of_docs, avg_length_per_doc, config):
+                print('\ttweet id: {}, score (unique common words with query): {}'.format(tweet_url+doc_tuple[1], doc_tuple[0]))
 
-        try:
-            inverted_index, document_dict = load_index(output_path)
-        except:
-            raise Exception('Load Index failed')
-        try:
-            tweet_url = 'http://twitter.com/anyuser/status/'
-            for idx, query in enumerate(query_list):
-                print("query {}:".format(idx))
-                for doc_tuple in search_and_rank_query(query, inverted_index, document_dict, num_docs_to_retrieve, num_of_docs, avg_length_per_doc, config):
-                    print('\ttweet id: {}, score (unique common words with query): {}'.format(tweet_url+doc_tuple[1], doc_tuple[0]))
-        except:
-            raise Exception('Searching and Ranking failed')
 
 
 def handle_queries(queries):

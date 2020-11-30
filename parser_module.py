@@ -113,72 +113,85 @@ class Parse:
         :param doc_as_list: list re-preseting the tweet.
         :return: Document object with corresponding fields.
         """
-        try:
+        if len(doc_as_list) > 0:
             tweet_id = doc_as_list[0]
+        else:
+            tweet_id = None
+        if len(doc_as_list) > 1:
             tweet_date = doc_as_list[1]
+        else:
+            tweet_date = None
+        if len(doc_as_list) > 2:
             full_text = doc_as_list[2]
+        else:
+            full_text = None
+        if len(doc_as_list) > 3:
             url = self.json_convert_string_to_object(doc_as_list[3])
-            retweet_text = doc_as_list[5]
+        else:
+            url = None
+        if len(doc_as_list) > 6:
             retweet_url = self.json_convert_string_to_object(doc_as_list[6])
+        else:
+            retweet_url = None
+        if len(doc_as_list) > 8:
             quote_text = doc_as_list[8]
+        else:
+            quote_text = None
+        if len(doc_as_list) > 9:
             quote_url = self.json_convert_string_to_object(doc_as_list[9])
+        else:
+            quote_url = None
+        if len(doc_as_list) > 12:
             retweet_quoted_url = self.json_convert_string_to_object(doc_as_list[12])
-            dict_list = [url, retweet_url, quote_url, retweet_quoted_url]
-            max_tf = 0
-        except:
-            raise Exception("Failed parsing to list")
+        else:
+            retweet_quoted_url = None
+        if full_text is None or tweet_id is None or tweet_date is None:
+            return None
+        dict_list = [url, retweet_url, quote_url, retweet_quoted_url]
+        max_tf = 0
 
 
 
         # if tweet_id == '123456789':
         #     print()
-
+        urls_set = set()
         try:
             # holds all URLs in one place
-            urls_set = set()
+
             for d in dict_list:
                 if d is not None:
                     for key in d.keys():
                         if key is not None and d[key] is not None:
                             urls_set.add(d[key])
-
-            if quote_text is not None:
-                full_text = full_text + " " + quote_text
-
-            # removes redundant short URLs from full_text
-            if len(urls_set) > 0:
-                full_text = self.clean_text_from_urls(full_text)
-            full_text = re.sub(self.take_off_non_latin, u'', full_text)
         except:
-            raise Exception("Failed pre-processing doc")
-        try:
-            tokenized_text, capital_letter_indexer, named_entities = self.parse_sentence(full_text)
-        except:
-            raise Exception("Failed parse_sentence")
-        try:
-            tokenized_text.extend([x.lower() for x in self.handle_dates(tweet_date)])
+            urls_set = set()
+        if quote_text is not None:
+            full_text = full_text + " " + quote_text
+        # removes redundant short URLs from full_text
+        if len(urls_set) > 0:
+            full_text = self.clean_text_from_urls(full_text)
+
+        full_text = re.sub(self.take_off_non_latin, u'', full_text)
+
+        tokenized_text, capital_letter_indexer, named_entities = self.parse_sentence(full_text)
+        tokenized_text.extend([x.lower() for x in self.handle_dates(tweet_date)])
         # expends the full text with tokenized urls
-            self.expand_tokenized_with_url_set(tokenized_text, urls_set)
-        except:
-            raise Exception("Failed parsing dates and urls")
-        try:
-            term_dict = {}
-            doc_length = len(tokenized_text)  # after text operations.
-            for idx, term in enumerate(tokenized_text):
-                if term not in term_dict.keys():
-                    # holding term's locations at current tweet
-                    term_dict[term] = [idx]
+        self.expand_tokenized_with_url_set(tokenized_text, urls_set)
+        term_dict = {}
+        doc_length = len(tokenized_text)  # after text operations.
+        for idx, term in enumerate(tokenized_text):
+            if term not in term_dict.keys():
+                # holding term's locations at current tweet
+                term_dict[term] = [idx]
 
-                else:
-                    term_dict[term].append(idx)
-                if len(term_dict[term]) > max_tf:
-                    max_tf = len(term_dict[term])
+            else:
+                term_dict[term].append(idx)
+            if len(term_dict[term]) > max_tf:
+                max_tf = len(term_dict[term])
 
-            document = Document(tweet_id, term_dict, doc_length, max_tf, len(term_dict),
-                                capital_letter_indexer, named_entities)
-            return document
-        except:
-            raise Exception("Failed handling term_dict")
+        document = Document(tweet_id, term_dict, doc_length, max_tf, len(term_dict),
+                            capital_letter_indexer, named_entities)
+        return document
 
     def handle_hashtags(self, tokenized_list, idx):
         """
