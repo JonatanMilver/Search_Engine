@@ -33,6 +33,10 @@ class Ranker:
         :param k: Number of top document to return
         :return: list of relevant document
         """
+
+        if k > len(sorted_relevant_doc):
+            return sorted_relevant_doc
+
         return sorted_relevant_doc[-k:]
 
     def calc_score(self, bm25_vec, doc_length, glove_vec, query_glove_vec, querty_tf_idf_vec, tweet_id):

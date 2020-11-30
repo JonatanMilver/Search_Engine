@@ -3,6 +3,7 @@ class ConfigClass:
         if corpus_path is None:
             # self.corpusPath = 'C:\\Users\\yonym\\Desktop\\ThirdYear\\IR\\engineV1\\Data\\'
             self.corpusPath = 'C:\\Users\\Guyza\\OneDrive\\Desktop\\Information_Systems\\University\\Third_year\\Semester_E\\Information_Retrieval\\Search_Engine_Project\\Data\\Data'
+            # self.corpusPath = 'C:\\Users\\Guyza\\OneDrive\\Desktop\\Information_Systems\\University\\Third_year\\Semester_E\\Information_Retrieval\\Search_Engine_Project\\Data\\Data\\date=07-16-2020\\covid19_07-16.snappy.parquet'
         else:
             self.corpusPath = corpus_path
         self.savedFileMainFolder = output_path

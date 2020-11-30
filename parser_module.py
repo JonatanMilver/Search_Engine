@@ -18,22 +18,20 @@ class Parse:
              r'!', r'?', r',', r':', r';', r'(', r')', r'...', r'[', ']', r'{', '}' "'&'", '.', r'\'d',
              '-', '--'])
         self.stop_words_dict = dict.fromkeys(self.stop_words)
+
         self.text_tokens = None
+
         self.stemmer = None
         if stemming:
             self.stemmer = Stemmer()
+
         self.hashtag_split_pattern = re.compile(r'[a-zA-Z0-9](?:[a-z0-9]+|[A-Z0-9]*(?=[A-Z]|$))')
-        # self.emoji_pattern = re.compile(pattern="["
-        #                                    u"\U0001F600-\U0001F64F"  # emoticons
-        #                                    u"\U0001F300-\U0001F5FF"  # symbols & pictographs
-        #                                    u"\U0001F680-\U0001F6FF"  # transport & map symbols
-        #                                    u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
-        #                                    "]+"
-        #                                 , flags=re.UNICODE)
-        self.take_off_non_latin = re.compile(
-            pattern=r'[^\x00-\x7F\x80-\xFF\u0100-\u017F\u0180-\u024F\u1E00-\u1EFF\u2019]')
+
+        self.take_off_non_latin = re.compile(pattern=r'[^\x00-\x7F\x80-\xFF\u0100-\u017F\u0180-\u024F\u1E00-\u1EFF\u2019]')
+
         self.left_slash_pattern = re.compile(r'^-?[0-9]+/0*[1-9][0-9]*$')
         self.right_slash_pattern = re.compile(r'^-?[0-9]+\\0*[1-9][0-9]*$')
+
         self.days_dict = {"Sat": "saturday", "Sun": "sunday", "Mon": "monday", "Tue": "tuesday", "Wed": "wednsday",
                           "Thu": "thursday", "Fri": "friday"}
         self.months_dict = {"Jul": ("july", "07"), "Aug": ("august", "08")}
@@ -64,7 +62,7 @@ class Parse:
             # token = self.take_emoji_off(token) #this one is faster
             # self.text_tokens[idx] = token
 
-            if token == '' or token.lower() in self.stop_words_dict or (len(token) == 1 and ord(token) > 126):
+            if token.lower() in self.stop_words_dict or (len(token) == 1 and ord(token) > 126):
                 continue
 
             if len(token) > 0 and token[0].isupper():
@@ -127,6 +125,12 @@ class Parse:
         retweet_quoted_url = self.json_convert_string_to_object(doc_as_list[12])
         dict_list = [url, retweet_url, quote_url, retweet_quoted_url]
         max_tf = 0
+
+
+        # if tweet_id == '123456789':
+        #     print()
+
+
         # holds all URLs in one place
         urls_set = set()
         for d in dict_list:
@@ -161,8 +165,7 @@ class Parse:
             if len(term_dict[term]) > max_tf:
                 max_tf = len(term_dict[term])
 
-        document = Document(tweet_id, tweet_date, full_text, url, retweet_text, retweet_url, quote_text,
-                            quote_url, term_dict, doc_length, max_tf, len(term_dict),
+        document = Document(tweet_id, term_dict, doc_length, max_tf, len(term_dict),
                             capital_letter_indexer, named_entities)
         return document
 

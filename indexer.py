@@ -90,7 +90,8 @@ class Indexer:
                     self.posting_dict[term] = len(self.posting_list) - 1
                 else:
                     tuple_idx = self.posting_dict[term]
-                    bisect.insort(self.posting_list[tuple_idx][1], insert_tuple)
+                    # bisect.insort(self.posting_list[tuple_idx][1], insert_tuple)
+                    self.posting_list[tuple_idx][1].append(insert_tuple)
 
                 # check if posting_dict is full
                 if len(self.posting_list) == self.postingDict_size:
@@ -417,7 +418,8 @@ class Indexer:
         chunk_length = self.postingDict_size // len(self.locations_at_postings) + 1
         #   inserts the chunks into a chunked list
         for key in self.locations_at_postings:
-            loaded, offset = utils.load_list(key, '', self.locations_at_postings[key], chunk_length)
+            # loaded, offset = utils.load_list(key, '', self.locations_at_postings[key], chunk_length)
+            loaded, offset = utils.load_list(key, self.config.get_out_path(), self.locations_at_postings[key], chunk_length)
             saved_chunks.append(loaded)
             self.locations_at_postings[key] = offset
 
@@ -469,12 +471,15 @@ class Indexer:
                 # saving will be here
                 if len(building_list) == self.postingDict_size:
                     self.merged_dicts.append(str(self.counter_of_postings))
-                    utils.save_list(building_list, str(self.counter_of_postings), '')
+                    # utils.save_list(building_list, str(self.counter_of_postings), '')
+                    utils.save_list(building_list, str(self.counter_of_postings), self.config.get_out_path())
                     self.counter_of_postings += 1
                     building_list = []
             # loads new chunks into the save_chunks list in the relevant indices.
             for index in should_enter:
-                loaded, offset = utils.load_list(str(index), '',
+                # loaded, offset = utils.load_list(str(index), '',
+                #                                  self.locations_at_postings[str(index)], chunk_length)
+                loaded, offset = utils.load_list(str(index), self.config.get_out_path(),
                                                  self.locations_at_postings[str(index)], chunk_length)
                 saved_chunks[index] = loaded
                 chunks_indices[index] = 0
@@ -490,7 +495,8 @@ class Indexer:
         # save of the last posting file.
         if len(building_list) > 0:
             self.merged_dicts.append(str(self.counter_of_postings))
-            utils.save_list(building_list, str(self.counter_of_postings), '')
+            # utils.save_list(building_list, str(self.counter_of_postings), '')
+            utils.save_list(building_list, str(self.counter_of_postings), self.config.get_out_path())
 
     def merge_terms_into_one(self, tuples_to_merge):
         """
@@ -561,7 +567,8 @@ class Indexer:
         :param posting: posting file loaded from disk.
         :return:
         """
-        posting_file = utils.load_list(posting, '', 0)
+        # posting_file = utils.load_list(posting, '', 0)
+        posting_file = utils.load_list(posting, self.config.get_out_path(), 0)
         new_posting = []
         changed = False
         for term, doc_list in posting_file:
@@ -582,7 +589,8 @@ class Indexer:
         else:
             for term, doc_list in posting_file:
                 dict_to_save[term] = doc_list
-        utils.save_dict(dict_to_save, posting, '')
+        # utils.save_dict(dict_to_save, posting, '')
+        utils.save_dict(dict_to_save, posting, self.config.get_out_path())
 
     # def save_new_dict(self, new_dict, added_dicts):
     #     self.lock.acquire()
