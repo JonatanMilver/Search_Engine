@@ -6,12 +6,11 @@ from indexer import Indexer
 from searcher import Searcher
 import utils
 import numpy as np
-import matplotlib.pyplot as plt
 
 from tqdm import tqdm
 
-# one_file = "C:\\Users\\yonym\\Desktop\\ThirdYear\\IR\\engineV1\\Data\\date=07-27-2020\\covid19_07-27.snappy.parquet"
-one_file = "C:\\Users\\Guyza\\OneDrive\\Desktop\\Information_Systems\\University\\Third_year\\Semester_E\\Information_Retrieval\\Search_Engine_Project\\Data\\Data\\date=07-27-2020\\covid19_07-27.snappy.parquet"
+one_file = "C:\\Users\\yonym\\Desktop\\ThirdYear\\IR\\engineV1\\Data\\date=07-27-2020\\covid19_07-27.snappy.parquet"
+# one_file = "C:\\Users\\Guyza\\OneDrive\\Desktop\\Information_Systems\\University\\Third_year\\Semester_E\\Information_Retrieval\\Search_Engine_Project\\Data\\Data\\date=07-27-2020\\covid19_07-27.snappy.parquet"
 # one_file = "C:\\Users\\Guyza\\OneDrive\\Desktop\\Information_Systems\\University\\Third_year\\Semester_E\\Information_Retrieval\\Search_Engine_Project\\Data\\Data\\date=07-21-2020\\covid19_07-21.snappy.parquet"
 # one_file = "C:\\Users\\Guyza\\OneDrive\\Desktop\\Information_Systems\\University\\Third_year\\Semester_E\\Information_Retrieval\\Search_Engine_Project\\Data\\Data\\date=07-16-2020\\covid19_07-16.snappy.parquet"
 corpus_path = "C:\\Users\\yonym\\Desktop\\ThirdYear\\IR\\engineV1\\Data\\"
@@ -43,23 +42,23 @@ def run_engine(corpus_path=None, output_path='', stemming=False):
     number_of_documents = 0
     sum_of_doc_lengths = 0
 
-    config = ConfigClass(corpus_path, output_path, stemming)
+
     r = ReadFile(corpus_path=config.get__corpusPath())
     p = Parse(config.toStem)
     indexer = Indexer(config, glove_dict)
 
-    # documents_list = r.read_file(file_name=one_file)
-    parquet_documents_list = r.read_folder(config.get__corpusPath())
-    for parquet_file in parquet_documents_list:
-        documents_list = r.read_file(file_name=parquet_file)
+    documents_list = r.read_file(file_name=one_file)
+    # parquet_documents_list = r.read_folder(config.get__corpusPath())
+    # for parquet_file in parquet_documents_list:
+    #     documents_list = r.read_file(file_name=parquet_file)
                 # Iterate over every document in the file
-        for idx, document in tqdm(enumerate(documents_list)):
-            # parse the document
-            parsed_document = p.parse_doc(document)
-            number_of_documents += 1
-            sum_of_doc_lengths += parsed_document.doc_length
-            # index the document data
-            indexer.add_new_doc(parsed_document)
+    for idx, document in tqdm(enumerate(documents_list)):
+        # parse the document
+        parsed_document = p.parse_doc(document)
+        number_of_documents += 1
+        sum_of_doc_lengths += parsed_document.doc_length
+        # index the document data
+        indexer.add_new_doc(parsed_document)
 
     print('Finished parsing and indexing. Starting to export files')
     # saves last posting file after indexer has done adding documents.
@@ -70,6 +69,7 @@ def run_engine(corpus_path=None, output_path='', stemming=False):
     # merges posting files.
     indexer.merge_chunks()
     print(time.time() - start)
+    utils.save_dict(indexer.inverted_idx, 'inverted_idx', config.get_out_path())
     # start = time.time()
     # # updates postings and invereted idx with capitals and entities.
     # indexer.switch_to_capitals()
@@ -86,7 +86,7 @@ def load_index(out_path=''):
 
 
 def search_and_rank_query(query, inverted_index, document_dict, k, num_of_docs=10000000, avg_length_per_doc=22.5):
-    p = Parse()
+    p = Parse(False)
 
     query_as_list = p.parse_sentence(query)
     searcher = Searcher(inverted_index, document_dict, num_of_docs, avg_length_per_doc, glove_dict)
@@ -96,7 +96,7 @@ def search_and_rank_query(query, inverted_index, document_dict, k, num_of_docs=1
 
 
 def main1():
-    num_of_docs, avg_length_per_doc = run_engine()
+    num_of_docs, avg_length_per_doc = run_engine(stemming=False)
     s= time.time()
     inverted_index, document_dict = load_index()
     print(time.time() - s)
@@ -104,14 +104,15 @@ def main1():
     k = int(input("Please enter number of docs to retrieve: "))
     tweet_url = 'http://twitter.com/anyuser/status/'
     start = time.time()
-    for doc_tuple in search_and_rank_query(query, inverted_index, document_dict, k, num_of_docs, avg_length_per_doc):
     # for doc_tuple in search_and_rank_query(query, inverted_index, document_dict, k):
+    for doc_tuple in search_and_rank_query(query, inverted_index, document_dict, k, num_of_docs=num_of_docs, avg_length_per_doc=avg_length_per_doc):
         print('tweet id: {}, score (unique common words with query): {}'.format(tweet_url+doc_tuple[1], doc_tuple[0]))
     print(time.time() - start)
 
 
 def main(corpus_path=None, output_path=None, stemming=False, queries=[], num_docs_to_retrieve=0):
-    run_engine(corpus_path, output_path, stemming)
+    config = ConfigClass(corpus_path, output_path, stemming)
+    num_of_doc, avg_length_per_doc = run_engine(corpus_path, output_path, stemming)
     query_list = queries
     k = num_docs_to_retrieve
     inverted_index = load_index(output_path)

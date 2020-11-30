@@ -8,7 +8,7 @@ from collections import Counter
 
 class Searcher:
 
-    def __init__(self, inverted_index, document_dict, n,  avg_length_per_doc, glove_dict):
+    def __init__(self, inverted_index, document_dict, n, avg_length_per_doc, glove_dict):
         """
         :param inverted_index: dictionary of inverted index
         """
@@ -45,7 +45,8 @@ class Searcher:
                         doc_list = curr_posting[term]
                         idx_set = {idx}
                         self.term_to_doclist[term] = [idx_set, doc_list]
-                        for i in range(idx+1, len(query)):  # check if any other terms in query are the same posting to avoid loading it more than once
+                        for i in range(idx + 1, len(
+                                query)):  # check if any other terms in query are the same posting to avoid loading it more than once
                             if query[i] in curr_posting:
                                 doc_list = curr_posting[query[i]]
                                 idx_set = {i}
@@ -63,7 +64,6 @@ class Searcher:
             except:
                 print('term {} not found in inverted index'.format(term))
 
-
         query_glove_vec /= len(query)
 
         p = 0.4
@@ -80,7 +80,7 @@ class Searcher:
 
             try:
                 if doc_list is not None:
-                    for doc_tuple in doc_list:
+                    for idx, doc_tuple in enumerate(doc_list):
                         tweet_id = doc_tuple[0]
                         pre_doc_dict_counter[tweet_id] += 1
                         # if tweet_id not in relevant_docs:
@@ -89,13 +89,12 @@ class Searcher:
                             # [[tf1, tf2...]
                             #  [idf1, idf2...]]
                             tf_idf_vec = np.zeros(shape=(2, len(query)))
-                            # relevant_docs[tweet_id] = (tf_idf_vec, self.document_dict[tweet_id][1],
-                            #                            self.document_dict[tweet_id][0])
+                            # loaded_dict = utils.load_dict()
                             pre_doc_dict[tweet_id] = (tf_idf_vec, self.document_dict[tweet_id][1],
-                                                       self.document_dict[tweet_id][0])
+                                                      self.document_dict[tweet_id][0])
+                            # for i in range(idx+1, len(doc_list)):
 
 
-                        # vec = relevant_docs[tweet_id][0]
                         vec = pre_doc_dict[tweet_id][0]
                         tf = self.calculate_tf(doc_tuple)
                         for index in term_indices:
