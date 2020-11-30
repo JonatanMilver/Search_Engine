@@ -418,7 +418,6 @@ class Indexer:
         chunk_length = self.postingDict_size // len(self.locations_at_postings) + 1
         #   inserts the chunks into a chunked list
         for key in self.locations_at_postings:
-            # loaded, offset = utils.load_list(key, '', self.locations_at_postings[key], chunk_length)
             loaded, offset = utils.load_list(key, self.config.get_out_path(), self.locations_at_postings[key], chunk_length)
             saved_chunks.append(loaded)
             self.locations_at_postings[key] = offset
@@ -471,14 +470,11 @@ class Indexer:
                 # saving will be here
                 if len(building_list) == self.postingDict_size:
                     self.merged_dicts.append(str(self.counter_of_postings))
-                    # utils.save_list(building_list, str(self.counter_of_postings), '')
                     utils.save_list(building_list, str(self.counter_of_postings), self.config.get_out_path())
                     self.counter_of_postings += 1
                     building_list = []
             # loads new chunks into the save_chunks list in the relevant indices.
             for index in should_enter:
-                # loaded, offset = utils.load_list(str(index), '',
-                #                                  self.locations_at_postings[str(index)], chunk_length)
                 loaded, offset = utils.load_list(str(index), self.config.get_out_path(),
                                                  self.locations_at_postings[str(index)], chunk_length)
                 saved_chunks[index] = loaded
@@ -495,7 +491,6 @@ class Indexer:
         # save of the last posting file.
         if len(building_list) > 0:
             self.merged_dicts.append(str(self.counter_of_postings))
-            # utils.save_list(building_list, str(self.counter_of_postings), '')
             utils.save_list(building_list, str(self.counter_of_postings), self.config.get_out_path())
 
     def merge_terms_into_one(self, tuples_to_merge):
@@ -560,37 +555,35 @@ class Indexer:
 
         utils.save_dict(self.inverted_idx, "inverted_idx", self.config.get_out_path())
 
-    def capital_per_posting(self, posting):
-        """
-        updates each posting with capital letters and named entities
-        and saves the updated to disk.
-        :param posting: posting file loaded from disk.
-        :return:
-        """
-        # posting_file = utils.load_list(posting, '', 0)
-        posting_file = utils.load_list(posting, self.config.get_out_path(), 0)
-        new_posting = []
-        changed = False
-        for term, doc_list in posting_file:
-            if term in self.entities_dict and self.entities_dict[term] < 2:
-                changed = True
-                continue
-
-            if term in self.global_capitals and self.global_capitals[term]:
-                changed = True
-                new_posting.append((term.upper(), doc_list))
-
-            else:
-                new_posting.append((term, doc_list))
-        dict_to_save = {}
-        if changed:
-            for term, doc_list in new_posting:
-                dict_to_save[term] = doc_list
-        else:
-            for term, doc_list in posting_file:
-                dict_to_save[term] = doc_list
-        # utils.save_dict(dict_to_save, posting, '')
-        utils.save_dict(dict_to_save, posting, self.config.get_out_path())
+    # def capital_per_posting(self, posting):
+    #     """
+    #     updates each posting with capital letters and named entities
+    #     and saves the updated to disk.
+    #     :param posting: posting file loaded from disk.
+    #     :return:
+    #     """
+    #     posting_file = utils.load_list(posting, '', 0)
+    #     new_posting = []
+    #     changed = False
+    #     for term, doc_list in posting_file:
+    #         if term in self.entities_dict and self.entities_dict[term] < 2:
+    #             changed = True
+    #             continue
+    #
+    #         if term in self.global_capitals and self.global_capitals[term]:
+    #             changed = True
+    #             new_posting.append((term.upper(), doc_list))
+    #
+    #         else:
+    #             new_posting.append((term, doc_list))
+    #     dict_to_save = {}
+    #     if changed:
+    #         for term, doc_list in new_posting:
+    #             dict_to_save[term] = doc_list
+    #     else:
+    #         for term, doc_list in posting_file:
+    #             dict_to_save[term] = doc_list
+    #     utils.save_dict(dict_to_save, posting, '')
 
     # def save_new_dict(self, new_dict, added_dicts):
     #     self.lock.acquire()
@@ -636,20 +629,20 @@ class Indexer:
     #
     #     add_to[term] = merged_posting
 
-    def update_inverted(self):
-        """
-        updates inverted idx dict with words with capitals and named entities.
-        :return:
-        """
-        for term in list(self.inverted_idx):
-            if term in self.entities_dict and self.entities_dict[term] < 2:
-                del self.inverted_idx[term]
-                continue
-
-            if term in self.global_capitals and self.global_capitals[term]:
-                inverted_val = self.inverted_idx[term]
-                del self.inverted_idx[term]
-                self.inverted_idx[term.upper()] = inverted_val
+    # def update_inverted(self):
+    #     """
+    #     updates inverted idx dict with words with capitals and named entities.
+    #     :return:
+    #     """
+    #     for term in list(self.inverted_idx):
+    #         if term in self.entities_dict and self.entities_dict[term] < 2:
+    #             del self.inverted_idx[term]
+    #             continue
+    #
+    #         if term in self.global_capitals and self.global_capitals[term]:
+    #             inverted_val = self.inverted_idx[term]
+    #             del self.inverted_idx[term]
+    #             self.inverted_idx[term.upper()] = inverted_val
 
     def delete_dict_after_saving(self):
         del self.document_dict

@@ -26,9 +26,8 @@ class Parse:
             self.stemmer = Stemmer()
 
         self.hashtag_split_pattern = re.compile(r'[a-zA-Z0-9](?:[a-z0-9]+|[A-Z0-9]*(?=[A-Z]|$))')
-
-        self.take_off_non_latin = re.compile(pattern=r'[^\x00-\x7F\x80-\xFF\u0100-\u017F\u0180-\u024F\u1E00-\u1EFF\u2019]')
-
+        self.take_off_non_latin = re.compile(
+            pattern=r'[^\x00-\x7F\x80-\xFF\u0100-\u017F\u0180-\u024F\u1E00-\u1EFF\u2019]')
         self.left_slash_pattern = re.compile(r'^-?[0-9]+/0*[1-9][0-9]*$')
         self.right_slash_pattern = re.compile(r'^-?[0-9]+\\0*[1-9][0-9]*$')
 
@@ -362,9 +361,17 @@ class Parse:
         :return: None
         """
         dash_idx = token.find('-')
-        tokenized_list.append(token.lower())
-        tokenized_list.append(token[:dash_idx].lower())
-        tokenized_list.append(token[dash_idx + 1:].lower())
+        after_dash = token[dash_idx + 1:].lower()
+        if dash_idx > 0:
+            tokenized_list.append(token.lower())
+            before_dash = token[:dash_idx].lower()
+            if before_dash not in self.stop_words_dict:
+                tokenized_list.append(before_dash)
+            if after_dash not in self.stop_words_dict:
+                tokenized_list.append(after_dash)
+        else:
+            if after_dash not in self.stop_words_dict:
+                tokenized_list.append(after_dash)
 
     def handle_fraction(self, tokenized_list, token, idx):
         """
