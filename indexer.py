@@ -12,6 +12,8 @@ class Indexer:
         # term -> df, posting_idx
         self.inverted_idx = {}
         self.document_dict = {}
+        self.document_posting = {}
+        self.document_posting_counter = 1
         self.locations_at_postings = OrderedDict()
         # posting_list example -> [('banana', [doc1, doc2,..]) ...]
         # doc1 -> ('tweet_id', and more details..)
@@ -53,16 +55,14 @@ class Indexer:
             if term in self.glove_dict:
                 document_vec += self.glove_dict[term]
         document_vec /= len(document_dictionary)
-        self.document_dict[document.tweet_id] = (
+        # document_vec, # numpy array of size 25 which
+        # represents the document in 25 dimensional space(GloVe)
+        self.doc_posting_dict[document.tweet_id] = document_vec
+        self.document_dict[document.tweet_id] = "doc_posting"+str(self.doc_posting_counter)
 
-            # document_vec, # numpy array of size 25 which
-            document_vec,
-            # represents the document in 25 dimensional space(GloVe)
-            document.doc_length  # total number of words in tweet
-        )
-        # self.doc_posting_dict[document.tweet_id] = (document_vec, document.doc_length)
-        # if len(self.doc_posting_dict) == 100000: #TODO should check the number
-        #     self.save_doc_posting()
+        if len(self.doc_posting_dict) == 100000: #TODO should check the number
+            self.save_doc_posting()
+
         # Go over each term in the doc
         for term in document_dictionary.keys():
             try:
@@ -76,7 +76,7 @@ class Indexer:
                     self.posting_dict[term] = None
 
                 insert_tuple = (document.tweet_id,  # tweet id
-                                # document.doc_length,  # total number of words in tweet
+                                document.doc_length,  # total number of words in tweet
                                 document.max_tf,  # number of occurrences of most common term in tweet
                                 document.unique_terms,  # number of unique words in tweet
                                 len(document_dictionary[term]),  # number of times term is in tweet - tf!
@@ -646,3 +646,8 @@ class Indexer:
 
     def delete_dict_after_saving(self):
         del self.document_dict
+
+    def save_doc_posting(self):
+        utils.save_dict(self.doc_posting_dict, "doc_posting" + str(self.doc_posting_counter), self.config.get_out_path())
+        self.doc_posting_counter += 1
+        self.doc_posting_dict = {}

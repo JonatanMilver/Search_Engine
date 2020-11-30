@@ -8,17 +8,17 @@ from collections import Counter
 
 class Searcher:
 
-    def __init__(self, inverted_index, document_dict, n, avg_length_per_doc, glove_dict):
+    def __init__(self, inverted_index, document_dict, n, avg_length_per_doc, glove_dict, config):
         """
         :param inverted_index: dictionary of inverted index
         """
-        self.parser = Parse(False)
-        self.ranker = Ranker(avg_length_per_doc)
+        self.ranker = Ranker(avg_length_per_doc, document_dict, config)
         self.inverted_index = inverted_index
         self.document_dict = document_dict
         self.term_to_doclist = {}
         self.number_of_documents = n
         self.glove_dict = glove_dict
+        self.config = config
 
     def relevant_docs_from_posting(self, query):
         """
@@ -40,7 +40,7 @@ class Searcher:
                     if term not in self.term_to_doclist:
                         # all documents having this term is not in the term dict,
                         # so load the appropriate postings and load them
-                        curr_posting = utils.load_dict(self.inverted_index[term][1], '')
+                        curr_posting = utils.load_dict(self.inverted_index[term][1], self.config.get_out_path())
 
                         doc_list = curr_posting[term]
                         idx_set = {idx}
@@ -82,6 +82,7 @@ class Searcher:
                 if doc_list is not None:
                     for idx, doc_tuple in enumerate(doc_list):
                         tweet_id = doc_tuple[0]
+                        tweet_doc_length = doc_tuple[1]
                         pre_doc_dict_counter[tweet_id] += 1
                         # if tweet_id not in relevant_docs:
                         if tweet_id not in pre_doc_dict:
@@ -90,8 +91,7 @@ class Searcher:
                             #  [idf1, idf2...]]
                             tf_idf_vec = np.zeros(shape=(2, len(query)))
                             # loaded_dict = utils.load_dict()
-                            pre_doc_dict[tweet_id] = (tf_idf_vec, self.document_dict[tweet_id][1],
-                                                      self.document_dict[tweet_id][0])
+                            pre_doc_dict[tweet_id] = (tf_idf_vec, tweet_doc_length)
                             # for i in range(idx+1, len(doc_list)):
 
 
@@ -103,8 +103,9 @@ class Searcher:
                             vec[1, idx] = qterm_to_idf[q_term]
                             query_vec[0, idx] = len(self.term_to_doclist[q_term][0]) / len(query)
 
-                        if pre_doc_dict_counter[tweet_id] >= min_num_of_words_to_relevent:
+                        if tweet_id not in relevant_docs and pre_doc_dict_counter[tweet_id] >= min_num_of_words_to_relevent:
                             relevant_docs[tweet_id] = pre_doc_dict[tweet_id]
+
 
             except:
                 print('term {} not found in posting'.format(term))
@@ -118,8 +119,8 @@ class Searcher:
         :return:
         """
         # to calc normalize tf
-        num_of_terms_in_doc = self.document_dict[tweet_term_tuple[0]][1]
-        frequency_term_in_doc = tweet_term_tuple[3]
+        num_of_terms_in_doc = tweet_term_tuple[1]
+        frequency_term_in_doc = tweet_term_tuple[2]
         tf = frequency_term_in_doc / num_of_terms_in_doc
 
         return tf
@@ -146,3 +147,4 @@ class Searcher:
         df = term_data[0]
         idf = math.log(((n - df + 0.5) / (df + 0.5)) + 1)
         return idf
+
