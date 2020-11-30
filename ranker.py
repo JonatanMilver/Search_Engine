@@ -1,27 +1,35 @@
 import bisect
 import numpy as np
 from numpy.linalg import norm
+import utils
 
 class Ranker:
-    def __init__(self, avg_length):
+    def __init__(self, avg_length, document_dict, config):
         self.avg_length_per_doc = avg_length
+        self.document_dict = document_dict
+        self.loaded_doc_postings = {}  # key - doc_posting name, value - the posting itself
+        self.config = config
 
     # @staticmethod
     def rank_relevant_doc(self, relevant_doc, query_glove_vec, query_tf_idf_vec):
         """
         This function provides rank for each relevant document and sorts them by their scores.
-        The current score considers solely the number of terms shared by the tweet (full_text) and query.
+        The current score considers solely the number of terms shared by the tweet_id (full_text) and query.
         :param relevant_doc: dictionary of documents that contains at least one term from the query.
         :return: sorted list of documents by score
         """
         ret = []
-        for tweet, tuple_vec_doclength in relevant_doc.items():
+        for tweet_id, tuple_vec_doclength in relevant_doc.items():
+            if self.document_dict[tweet_id] not in self.loaded_doc_postings:
+                loaded_dict = utils.load_dict(self.document_dict[tweet_id], self.config.get_out_path())
+                self.loaded_doc_postings[self.document_dict[tweet_id]] = loaded_dict
+
             bm25_vec = tuple_vec_doclength[0]
             doc_length = tuple_vec_doclength[1]
-            glove_vec = tuple_vec_doclength[2]
-            tweet_tuple = (self.calc_score(bm25_vec, doc_length, glove_vec, query_glove_vec, query_tf_idf_vec, tweet), tweet)
+            # glove_vec = tuple_vec_doclength[2]
+            glove_vec = self.loaded_doc_postings[self.document_dict[tweet_id]][tweet_id]
+            tweet_tuple = (self.calc_score(bm25_vec, doc_length, glove_vec, query_glove_vec, query_tf_idf_vec, tweet_id), tweet_id)
             bisect.insort(ret, tweet_tuple)
-            # bisect.insort()
 
         return ret
 
