@@ -21,7 +21,7 @@ glove_dict = {}
 
 # def load_glove_dict():
 #     global glove_dict
-with open(GLOVE_PATH_SERVER, 'r', encoding='utf-8') as f:
+with open(GLOVE_PATH_LOCAL, 'r', encoding='utf-8') as f:
     for line in tqdm(f):
         values = line.split()
         word = values[0]
@@ -45,10 +45,7 @@ def run_engine(config):
     r = ReadFile(corpus_path=config.get__corpusPath())
     p = Parse(config.toStem)
     indexer = Indexer(config, glove_dict)
-    # try:
-    #     documents_list = r.read_file(file_name=config.get__corpusPath())
-    # except:
-    #     raise Exception("Failed in reading the parquet files")
+    documents_list = r.read_file(file_name=config.get__corpusPath())
     parquet_documents_list = r.read_folder(config.get__corpusPath())
     for parquet_file in parquet_documents_list:
         documents_list = r.read_file(file_name=parquet_file)
@@ -133,6 +130,7 @@ def main(corpus_path=None, output_path='', stemming=False, queries=None, num_doc
             print("query {}:".format(idx))
             for doc_tuple in search_and_rank_query(query, inverted_index, document_dict, num_docs_to_retrieve, num_of_docs, avg_length_per_doc, config):
                 print('\ttweet id: {}, score (unique common words with query): {}'.format(tweet_url+doc_tuple[1], doc_tuple[0]))
+
 
 
 def handle_queries(queries):
