@@ -23,13 +23,6 @@ class Parse:
         if stemming:
             self.stemmer = Stemmer()
         self.hashtag_split_pattern = re.compile(r'[a-zA-Z0-9](?:[a-z0-9]+|[A-Z0-9]*(?=[A-Z]|$))')
-        # self.emoji_pattern = re.compile(pattern="["
-        #                                    u"\U0001F600-\U0001F64F"  # emoticons
-        #                                    u"\U0001F300-\U0001F5FF"  # symbols & pictographs
-        #                                    u"\U0001F680-\U0001F6FF"  # transport & map symbols
-        #                                    u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
-        #                                    "]+"
-        #                                 , flags=re.UNICODE)
         self.take_off_non_latin = re.compile(
             pattern=r'[^\x00-\x7F\x80-\xFF\u0100-\u017F\u0180-\u024F\u1E00-\u1EFF\u2019]')
         self.left_slash_pattern = re.compile(r'^-?[0-9]+/0*[1-9][0-9]*$')
@@ -161,8 +154,7 @@ class Parse:
             if len(term_dict[term]) > max_tf:
                 max_tf = len(term_dict[term])
 
-        document = Document(tweet_id, tweet_date, full_text, url, retweet_text, retweet_url, quote_text,
-                            quote_url, term_dict, doc_length, max_tf, len(term_dict),
+        document = Document(tweet_id, term_dict, doc_length, max_tf, len(term_dict),
                             capital_letter_indexer, named_entities)
         return document
 
@@ -359,9 +351,17 @@ class Parse:
         :return: None
         """
         dash_idx = token.find('-')
-        tokenized_list.append(token.lower())
-        tokenized_list.append(token[:dash_idx].lower())
-        tokenized_list.append(token[dash_idx + 1:].lower())
+        after_dash = token[dash_idx + 1:].lower()
+        if dash_idx > 0:
+            tokenized_list.append(token.lower())
+            before_dash = token[:dash_idx].lower()
+            if before_dash not in self.stop_words_dict:
+                tokenized_list.append(before_dash)
+            if after_dash not in self.stop_words_dict:
+                tokenized_list.append(after_dash)
+        else:
+            if after_dash not in self.stop_words_dict:
+                tokenized_list.append(after_dash)
 
     def handle_fraction(self, tokenized_list, token, idx):
         """
