@@ -4,11 +4,13 @@ from numpy.linalg import norm
 import utils
 
 
+
 class Ranker:
     def __init__(self, avg_length, document_dict, config):
         self.avg_length_per_doc = avg_length
         self.document_dict = document_dict
-        self.loaded_doc_postings = {}  # key - doc_posting name, value - the posting itself
+        # self.loaded_doc_postings = {}  # key - doc_posting name, value - the posting itself
+        self.loaded_doc_postings = {}  # key - tweet_id , value - the tweet's vector and the tweet_date
         self.config = config
 
     # @staticmethod
@@ -20,17 +22,28 @@ class Ranker:
         :return: sorted list of documents by score
         """
         ret = []
-        for tweet_id, tuple_vec_doclength in relevant_doc.items():
-            if self.document_dict[tweet_id] not in self.loaded_doc_postings:
+        key_list = list(relevant_doc.keys())
+        # for tweet_id, tuple_vec_doclength in relevant_doc.items():
+        for idx, tweet_id in enumerate(key_list):
+            tuple_vec_doclength = relevant_doc[tweet_id]
+            # if self.document_dict[tweet_id] not in self.loaded_doc_postings:
+            if tweet_id not in self.loaded_doc_postings:
                 loaded_dict = utils.load_dict(self.document_dict[tweet_id], self.config.get_out_path())
-                self.loaded_doc_postings[self.document_dict[tweet_id]] = loaded_dict
+                # self.loaded_doc_postings[self.document_dict[tweet_id]] = loaded_dict
+                self.loaded_doc_postings[tweet_id] = loaded_dict[tweet_id]
+                for i in range(idx+1, len(key_list)):
+                    if key_list[i] in loaded_dict:
+                        self.loaded_doc_postings[key_list[i]] = loaded_dict[key_list[i]]
 
             bm25_vec = tuple_vec_doclength[0]
             doc_length = tuple_vec_doclength[1]
             # glove_vec = tuple_vec_doclength[2]
-            glove_vec = self.loaded_doc_postings[self.document_dict[tweet_id]][tweet_id]
-            tweet_tuple = (
-            self.calc_score(bm25_vec, doc_length, glove_vec, query_glove_vec, query_tf_idf_vec, tweet_id), tweet_id)
+            # glove_vec = self.loaded_doc_postings[self.document_dict[tweet_id]][tweet_id][0]
+            glove_vec = self.loaded_doc_postings[tweet_id][0]
+            # tweet_date = self.loaded_doc_postings[self.document_dict[tweet_id]][tweet_id][1]
+            tweet_date = self.loaded_doc_postings[tweet_id][1]
+            calculated_score = self.calc_score(bm25_vec, doc_length, glove_vec, query_glove_vec, query_tf_idf_vec)
+            tweet_tuple = (calculated_score, tweet_id, tweet_date)
             bisect.insort(ret, tweet_tuple)
 
         return ret
@@ -45,11 +58,11 @@ class Ranker:
         """
 
         if k > len(sorted_relevant_doc):
-            return sorted_relevant_doc
+            return sorted(sorted_relevant_doc, key=lambda x: (x[0], x[2]))
 
-        return sorted_relevant_doc[-k:]
+        return sorted(sorted_relevant_doc, key=lambda x: (x[0], x[2]))[-k:]
 
-    def calc_score(self, bm25_vec, doc_length, glove_vec, query_glove_vec, querty_tf_idf_vec, tweet_id):
+    def calc_score(self, bm25_vec, doc_length, glove_vec, query_glove_vec, querty_tf_idf_vec):
         """
 
         :param query_vec:
@@ -91,4 +104,6 @@ class Ranker:
     def cosine(self, v1, v2):
         numenator = np.dot(v1, v2)
         denominator = norm(v1) * norm(v2)
+        if denominator == 0 or numenator == 0:
+            return 0
         return numenator / denominator

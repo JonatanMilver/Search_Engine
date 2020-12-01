@@ -1,8 +1,5 @@
-import bisect
 from collections import Counter, OrderedDict
 import utils
-import threading
-from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 
 
@@ -18,6 +15,8 @@ class Indexer:
         # posting_list example -> [('banana', [doc1, doc2,..]) ...]
         # doc1 -> ('tweet_id', and more details..)
         self.posting_list = []
+        self.accumulative_size = 0
+        self.max_accumulative = 4000000
         self.posting_dict = {}
         self.postingDict_size = 200000
         self.counter_of_postings = 0
@@ -28,7 +27,6 @@ class Indexer:
         self.doc_posting_counter = 0
         self.doc_posting_dict = {}
         self.merged_dicts = []
-        self.lock = threading.Lock()
 
     def add_new_doc(self, document):
         """
@@ -39,6 +37,7 @@ class Indexer:
         """
         document_dictionary = document.term_doc_dictionary
         document_capitals = document.capital_letter_indexer
+        document_date = document.tweet_date
         for key_term in document_capitals:
             if key_term not in self.global_capitals:
                 self.global_capitals[key_term] = document_capitals[key_term]
@@ -57,7 +56,7 @@ class Indexer:
         document_vec /= len(document_dictionary)
         # document_vec, # numpy array of size 25 which
         # represents the document in 25 dimensional space(GloVe)
-        self.doc_posting_dict[document.tweet_id] = document_vec
+        self.doc_posting_dict[document.tweet_id] = (document_vec, document_date)
         self.document_dict[document.tweet_id] = "doc_posting"+str(self.doc_posting_counter)
 
         if len(self.doc_posting_dict) == 100000: #TODO should check the number
@@ -79,10 +78,7 @@ class Indexer:
                                 document.doc_length,  # total number of words in tweet
                                 document.max_tf,  # number of occurrences of most common term in tweet
                                 document.unique_terms,  # number of unique words in tweet
-                                len(document_dictionary[term]),  # number of times term is in tweet - tf!
-                                # document_vec  # numpy array of size 25 which
-                                # represents the document in 25 dimensional space(GloVe)
-                                # document_dictionary[term]  # positions of term in tweet
+                                document_dictionary[term],  # number of times term is in tweet - tf!
                                 )
                 # if there're no documents for the current term, insert the first document
                 if self.posting_dict[term] is None:
@@ -90,7 +86,6 @@ class Indexer:
                     self.posting_dict[term] = len(self.posting_list) - 1
                 else:
                     tuple_idx = self.posting_dict[term]
-                    # bisect.insort(self.posting_list[tuple_idx][1], insert_tuple)
                     self.posting_list[tuple_idx][1].append(insert_tuple)
 
                 # check if posting_dict is full
@@ -107,306 +102,6 @@ class Indexer:
         self.counter_of_postings += 1
         self.posting_dict = {}
         self.posting_list = []
-
-    # def first(self):
-    #     while len(self.merged_dicts) > 1:
-    #         self.merged_dicts = self.second()
-    #
-    #
-    # def second(self):
-    #         new_merged = []
-    #         i = 0
-    #         while i < len(self.merged_dicts):
-    #             if i + 1 >= len(self.merged_dicts):
-    #                 new_merged.append(self.merged_dicts[i])
-    #                 return new_merged
-    #
-    #             # posting files names will be added to this list
-    #             added_dicts = []
-    #
-    #             list_1 = self.merged_dicts[i]
-    #             list_2 = self.merged_dicts[i + 1]
-    #
-    #             index_l_1 = 0
-    #             index_l_2 = 0
-    #
-    #             is_done_1 = False
-    #             is_done_2 = False
-    #
-    #             d1 = utils.load_obj(list_1[index_l_1], '')
-    #             d2 = utils.load_obj(list_2[index_l_2], '')
-    #             index_d1 = 0
-    #             index_d2 = 0
-    #
-    #             d1_keys = list(d1.keys())
-    #             d2_keys = list(d2.keys())
-    #
-    #             new_dict = OrderedDict()
-    #
-    #             while index_l_1 < len(list_1) and index_l_2 < len(list_2):
-    #                 if is_done_1:
-    #                     d1 = utils.load_obj(list_1[index_l_1], '')
-    #                     is_done_1 = False
-    #                     index_d1 = 0
-    #                 if is_done_2:
-    #                     d2 = utils.load_obj(list_2[index_l_2], '')
-    #                     is_done_2 = False
-    #                     index_d2 = 0
-    #
-    #                 d1_keys = list(d1.keys())
-    #                 d2_keys = list(d2.keys())
-    #
-    #                 d1_key = d1_keys[index_d1]
-    #                 d1_in = d1_key
-    #                 d2_key = d2_keys[index_d2]
-    #                 d2_in = d2_key
-    #                 while index_d1 < len(d1) and index_d2 < len(d2):
-    #                     d1_key = d1_keys[index_d1]
-    #                     d1_in = d1_key
-    #                     d2_key = d2_keys[index_d2]
-    #                     d2_in = d2_key
-    #
-    #                     # if d1_key not in self.inverted_idx:
-    #                     #     d1_in = d1_key.lower()
-    #                     # if d2_key not in self.inverted_idx:
-    #                     #     d2_in = d2_key.lower()
-    #
-    #                     if d1_key == d2_key:
-    #                         # merge posting list
-    #                         self.merge_terms_post_dict(new_dict, d1_key, d1, d2)
-    #                         self.inverted_idx[d1_in][1] = str(self.counter_of_postings)
-    #                         index_d1 += 1
-    #                         index_d2 += 1
-    #
-    #                     elif d1_key < d2_key:
-    #                         # insert d1 posting to the new dict
-    #                         # if d1_key.lower() == d2_key:
-    #                         #     self.merge_terms_post_dict(new_dict, d2_in, d1, d2)
-    #                         #     self.inverted_idx[d2_in][1] = str(self.counter_of_postings)
-    #                         #     index_d1 += 1
-    #                         #     index_d2 += 1
-    #                         # else:
-    #                         new_dict[d1_in] = d1[d1_key]
-    #                         self.inverted_idx[d1_in][1] = str(self.counter_of_postings)
-    #                         index_d1 += 1
-    #                     else:  # d2_key < d1_key:
-    #                         # insert d2 posting to the new dict
-    #                         # if d2_key.lower() == d1_key:
-    #                         #     self.merge_terms_post_dict(new_dict, d1_in, d1, d2)
-    #                         #     self.inverted_idx[d1_in][1] = str(self.counter_of_postings)
-    #                         #     index_d1 += 1
-    #                         #     index_d2 += 1
-    #                         # else:
-    #                         new_dict[d2_in] = d2[d2_key]
-    #                         self.inverted_idx[d2_in][1] = str(self.counter_of_postings)
-    #                         index_d2 += 1
-    #
-    #                     # check if length of new disk equals the required value.
-    #                     # if so, save it and append it to added_dicts
-    #                     if len(new_dict) == self.postingDict_size:
-    #                         new_dict = self.save_new_dict(new_dict, added_dicts)
-    #
-    #                 if index_d1 >= len(d1):
-    #                     is_done_1 = True
-    #                     index_l_1 += 1
-    #                 if index_d2 >= len(d2):
-    #                     is_done_2 = True
-    #                     index_l_2 += 1
-    #
-    #             while index_d1 < len(d1):
-    #                 d1_key = d1_keys[index_d1]
-    #                 d1_in = d1_key
-    #                 # if d1_key not in self.inverted_idx:
-    #                 #     d1_in = d1_key.lower()
-    #                 # add remaining terms to new dict
-    #                 new_dict[d1_in] = d1[d1_key]
-    #                 self.inverted_idx[d1_in][1] = str(self.counter_of_postings)
-    #                 index_d1 += 1
-    #                 # check if length of new disk equals the required value.
-    #                 # if so, save it
-    #                 if len(new_dict) == self.postingDict_size:
-    #                     new_dict = self.save_new_dict(new_dict, added_dicts)
-    #
-    #             if not is_done_1:
-    #                 index_l_1 += 1
-    #             while index_d2 < len(d2):
-    #                 d2_key = d2_keys[index_d2]
-    #                 d2_in = d2_key
-    #                 # if d2_key not in self.inverted_idx:
-    #                 #     d2_in = d2_key.lower()
-    #                 new_dict[d2_in] = d2[d2_key]
-    #                 self.inverted_idx[d2_in][1] = str(self.counter_of_postings)
-    #                 index_d2 += 1
-    #                 # add remaining terms to new dict.
-    #                 # check if length of new disk equals the required value.
-    #                 # if so, save it
-    #                 if len(new_dict) == self.postingDict_size:
-    #                     new_dict = self.save_new_dict(new_dict, added_dicts)
-    #
-    #             if not is_done_2:
-    #                 index_l_2 += 1
-    #
-    #             while index_l_1 < len(list_1):
-    #                 added_dicts.append(list_1[index_l_1])
-    #                 index_l_1 += 1
-    #             while index_l_2 < len(list_2):
-    #                 added_dicts.append(list_2[index_l_2])
-    #                 index_l_2 += 1
-    #
-    #             # if new dict's length is larger than 0, save it
-    #             if len(new_dict) > 0:
-    #                 new_dict = self.save_new_dict(new_dict, added_dicts)
-    #
-    #             new_merged.append(added_dicts)
-    #             i = i + 2
-    #         return new_merged
-    #
-    # def mergeSortParallel(self, n):
-    #     """
-    #     Attempt to get parallel mergesort faster in Windows.  There is
-    #     something wrong with having one Process instantiate another.
-    #     Looking at speedup.py, we get speedup by instantiating all the
-    #     processes at the same level.
-    #     """
-    #     numproc = 300 if n > 300 else n
-    #     # instantiate a Pool of workers
-    #     pool = ThreadPoolExecutor(max_workers=numproc)
-    #     # i.e., perform mergesort on the first 1/numproc of the lyst,
-    #     # the second 1/numproc of the lyst, etc.
-    #
-    #     # Now we have a bunch of sorted sublists.  while there is more than
-    #     # one, combine them with merge.
-    #     while len(self.merged_dicts) > 1:
-    #         to_append = None
-    #         if len(self.merged_dicts) % 2 == 1:
-    #             to_append = self.merged_dicts.pop()
-    #
-    #         # get sorted sublist pairs to send to merge
-    #         args = [(self.merged_dicts[i], self.merged_dicts[i + 1]) \
-    #                 for i in range(0, len(self.merged_dicts), 2)]
-    #         self.merged_dicts = list(pool.map(self.mergeWrap, args))
-    #         if to_append is not None:
-    #             self.merged_dicts.append(to_append)
-    #
-    #     # Since we start with numproc a power of two, there will always be an
-    #     # even number of sorted sublists to pair up, until there is only one.
-    #
-    #     self.merged_dicts = self.merged_dicts[0]
-    #
-    # def mergeWrap(self, AandB):
-    #     a, b = AandB
-    #     return self.merge(a, b)
-    #
-    # def merge(self, left, right):
-    #     """returns a merged and sorted version of the two already-sorted lists."""
-    #     ret = []
-    #     li = ri = 0
-    #
-    #     is_done_1 = False
-    #     is_done_2 = False
-    #     try:
-    #
-    #         d1 = utils.load_obj(left[li], '')
-    #         d2 = utils.load_obj(right[ri], '')
-    #     except:
-    #         print()
-    #
-    #     index_d1 = 0
-    #     index_d2 = 0
-    #
-    #     d1_keys = list(d1.keys())
-    #     d2_keys = list(d2.keys())
-    #
-    #     new_dict = OrderedDict()
-    #     while li < len(left) and ri < len(right):
-    #         if is_done_1:
-    #             d1 = utils.load_obj(left[li], '')
-    #             is_done_1 = False
-    #             index_d1 = 0
-    #         if is_done_2:
-    #             d2 = utils.load_obj(right[ri], '')
-    #             is_done_2 = False
-    #             index_d2 = 0
-    #
-    #         d1_keys = list(d1.keys())
-    #         d2_keys = list(d2.keys())
-    #
-    #         d1_key = d1_keys[index_d1]
-    #         d2_key = d2_keys[index_d2]
-    #
-    #         while index_d1 < len(d1) and index_d2 < len(d2):
-    #             d1_key = d1_keys[index_d1]
-    #             d2_key = d2_keys[index_d2]
-    #
-    #             if d1_key == d2_key:
-    #                 # merge posting list
-    #                 self.merge_terms_post_dict(new_dict, d1_key, d1, d2)
-    #                 self.inverted_idx[d1_key][1] = str(self.counter_of_postings)
-    #                 index_d1 += 1
-    #                 index_d2 += 1
-    #
-    #             elif d1_key < d2_key:
-    #                 new_dict[d1_key] = d1[d1_key]
-    #                 self.inverted_idx[d1_key][1] = str(self.counter_of_postings)
-    #                 index_d1 += 1
-    #             else:  # d2_key < d1_key:
-    #                 new_dict[d2_key] = d2[d2_key]
-    #                 self.inverted_idx[d2_key][1] = str(self.counter_of_postings)
-    #                 index_d2 += 1
-    #
-    #             # check if length of new disk equals the required value.
-    #             # if so, save it and append it to added_dicts
-    #             if len(new_dict) == self.postingDict_size:
-    #                 new_dict = self.save_new_dict(new_dict, ret)
-    #
-    #         if index_d1 >= len(d1):
-    #             is_done_1 = True
-    #             li += 1
-    #         if index_d2 >= len(d2):
-    #             is_done_2 = True
-    #             ri += 1
-    #
-    #     while index_d1 < len(d1):
-    #         d1_key = d1_keys[index_d1]
-    #         # add remaining terms to new dict
-    #         new_dict[d1_key] = d1[d1_key]
-    #         self.inverted_idx[d1_key][1] = str(self.counter_of_postings)
-    #         index_d1 += 1
-    #         # check if length of new disk equals the required value.
-    #         # if so, save it
-    #         if len(new_dict) == self.postingDict_size:
-    #             new_dict = self.save_new_dict(new_dict, ret)
-    #
-    #     if not is_done_1:
-    #         li += 1
-    #
-    #     while index_d2 < len(d2):
-    #         d2_key = d2_keys[index_d2]
-    #         new_dict[d2_key] = d2[d2_key]
-    #         self.inverted_idx[d2_key][1] = str(self.counter_of_postings)
-    #         index_d2 += 1
-    #         # add remaining terms to new dict.
-    #         # check if length of new disk equals the required value.
-    #         # if so, save it
-    #         if len(new_dict) == self.postingDict_size:
-    #             new_dict = self.save_new_dict(new_dict, ret)
-    #
-    #     if not is_done_2:
-    #         ri += 1
-    #
-    #     while li < len(left):
-    #         ret.append(left[li])
-    #         li += 1
-    #     while ri < len(right):
-    #         ret.append(right[ri])
-    #         ri += 1
-    #
-    #     # if new dict's length is larger than 0, save it
-    #     if len(new_dict) > 0:
-    #         new_dict = self.save_new_dict(new_dict, ret)
-    #
-    #     # new_merged.append(ret)
-    #     return ret
 
     def merge_chunks(self):
         """
@@ -448,16 +143,19 @@ class Indexer:
                 # if it is a named entity and it exists in less than 2 tweets, erase this term.
                 if appended_term in self.entities_dict and self.entities_dict[appended_term] < 2:
                     should_append = False
-                    # del self.inverted_idx[appended_term]
                     self.inverted_idx.pop(appended_term, None)
                 # update terms with capital letters
                 if appended_term in self.global_capitals and self.global_capitals[appended_term]:
                     merged_tuple = (appended_term.upper(), merged_tuple[1])
                     inverted_val = self.inverted_idx[appended_term]
-                    # del self.inverted_idx[appended_term]
                     self.inverted_idx.pop(appended_term, None)
                     self.inverted_idx[appended_term.upper()] = inverted_val
+                appended_term = merged_tuple[0]
+                if appended_term in self.inverted_idx and self.inverted_idx[appended_term][0] == 1:
+                    should_append = False
+                    self.inverted_idx.pop(appended_term, None)
                 if should_append:
+                    self.accumulative_size += len(merged_tuple[1])
                     building_list.append(merged_tuple)
                     self.inverted_idx[merged_tuple[0]][1] = str(self.counter_of_postings)
 
@@ -468,9 +166,10 @@ class Indexer:
                 should_enter = self.update_should_enter(saved_chunks, chunks_indices)
 
                 # saving will be here
-                if len(building_list) == self.postingDict_size:
+                if self.accumulative_size >= self.max_accumulative:
                     self.merged_dicts.append(str(self.counter_of_postings))
                     utils.save_list(building_list, str(self.counter_of_postings), self.config.get_out_path())
+                    self.accumulative_size = 0
                     self.counter_of_postings += 1
                     building_list = []
             # loads new chunks into the save_chunks list in the relevant indices.
@@ -540,112 +239,10 @@ class Indexer:
             return -1
         return load_list
 
-    def switch_to_capitals(self):
-        """
-        updating the posting files and the inverted index with terms
-        that should be with capital letters and named entities.
-        :return:
-        """
-        # TODO check how we should change the number of maximum threads
-        # numproc = 300 if len(self.merged_dicts) > 300 else len(self.merged_dicts)
-        numproc = len(self.merged_dicts) // 3 if len(self.merged_dicts) // 3 > 0 else 1
-        pool = ThreadPoolExecutor(max_workers=numproc)
-        pool.map(self.capital_per_posting, self.merged_dicts)
-        self.update_inverted()
-
-        utils.save_dict(self.inverted_idx, "inverted_idx", self.config.get_out_path())
-
-    # def capital_per_posting(self, posting):
-    #     """
-    #     updates each posting with capital letters and named entities
-    #     and saves the updated to disk.
-    #     :param posting: posting file loaded from disk.
-    #     :return:
-    #     """
-    #     posting_file = utils.load_list(posting, '', 0)
-    #     new_posting = []
-    #     changed = False
-    #     for term, doc_list in posting_file:
-    #         if term in self.entities_dict and self.entities_dict[term] < 2:
-    #             changed = True
-    #             continue
-    #
-    #         if term in self.global_capitals and self.global_capitals[term]:
-    #             changed = True
-    #             new_posting.append((term.upper(), doc_list))
-    #
-    #         else:
-    #             new_posting.append((term, doc_list))
-    #     dict_to_save = {}
-    #     if changed:
-    #         for term, doc_list in new_posting:
-    #             dict_to_save[term] = doc_list
-    #     else:
-    #         for term, doc_list in posting_file:
-    #             dict_to_save[term] = doc_list
-    #     utils.save_dict(dict_to_save, posting, '')
-
-    # def save_new_dict(self, new_dict, added_dicts):
-    #     self.lock.acquire()
-    #     posting_name = str(self.counter_of_postings)
-    #     added_dicts.append(posting_name)
-    #     self.counter_of_postings += 1
-    #     # self.lock.release()
-    #     utils.save_list(new_dict, posting_name, '')
-    #     # self.lock.acquire()
-    #     new_dict = OrderedDict()
-    #     self.lock.release()
-    #     return new_dict
-
-    # def merge_terms_post_dict(self, add_to, term, d1, d2):
-    #     if term in d1:
-    #         l1 = d1[term]
-    #     else:
-    #         # l1 = d1[term.upper()]
-    #         l1 = d1[term]
-    #     if term in d2:
-    #         l2 = d2[term]
-    #     else:
-    #         # l2 = d2[term.upper()]
-    #         l2 = d2[term]
-    #
-    #     l1_index = 0
-    #     l2_index = 0
-    #
-    #     merged_posting = []
-    #     while l1_index < len(l1) and l2_index < len(l2):
-    #         if l1[l1_index][0] > l2[l2_index][0]:
-    #             merged_posting.append(l2[l2_index])
-    #             l2_index += 1
-    #         else:
-    #             merged_posting.append(l1[l1_index])
-    #             l1_index += 1
-    #     while l1_index < len(l1):
-    #         merged_posting.append(l1[l1_index])
-    #         l1_index += 1
-    #     while l2_index < len(l2):
-    #         merged_posting.append(l2[l2_index])
-    #         l2_index += 1
-    #
-    #     add_to[term] = merged_posting
-
-    # def update_inverted(self):
-    #     """
-    #     updates inverted idx dict with words with capitals and named entities.
-    #     :return:
-    #     """
-    #     for term in list(self.inverted_idx):
-    #         if term in self.entities_dict and self.entities_dict[term] < 2:
-    #             del self.inverted_idx[term]
-    #             continue
-    #
-    #         if term in self.global_capitals and self.global_capitals[term]:
-    #             inverted_val = self.inverted_idx[term]
-    #             del self.inverted_idx[term]
-    #             self.inverted_idx[term.upper()] = inverted_val
 
     def delete_dict_after_saving(self):
         del self.document_dict
+        del self.doc_posting_dict
 
     def save_doc_posting(self):
         utils.save_dict(self.doc_posting_dict, "doc_posting" + str(self.doc_posting_counter), self.config.get_out_path())
