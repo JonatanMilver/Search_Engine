@@ -1,6 +1,15 @@
 import pickle
 import os
 
+def load_inverted_index(path):
+    ret_dict = {}
+    with open(os.path.join(path, 'inverted_idx') + '.pkl', 'rb') as f:
+        while True:
+            try:
+                 pair = pickle.load(f)
+                 ret_dict[pair[0]] = pair[1][0]
+            except:
+                return ret_dict
 
 def save_list(obj, name, path):
     """

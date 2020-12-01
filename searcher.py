@@ -1,5 +1,4 @@
 import math
-from parser_module import Parse
 from ranker import Ranker
 import numpy as np
 import utils
@@ -45,8 +44,7 @@ class Searcher:
                         doc_list = curr_posting[term]
                         idx_set = {idx}
                         self.term_to_doclist[term] = [idx_set, doc_list]
-                        for i in range(idx + 1, len(
-                                query)):  # check if any other terms in query are the same posting to avoid loading it more than once
+                        for i in range(idx + 1, len(query)):  # check if any other terms in query are the same posting to avoid loading it more than once
                             if query[i] in curr_posting:
                                 doc_list = curr_posting[query[i]]
                                 idx_set = {i}

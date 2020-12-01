@@ -4,7 +4,7 @@ from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from document import Document
 import re
-
+from datetime import datetime
 from stemmer import Stemmer
 
 
@@ -47,19 +47,12 @@ class Parse:
         """
         self.text_tokens = word_tokenize(text)
         tokenized_list = []
-        ne_words = set()
         entity_chunk = ''
         empty_chunk = 0
         capital_letter_indexer = {}
         named_entities = set()
 
         for idx, token in enumerate(self.text_tokens):
-            # if self.stemmer is not None:
-            #     token = self.stemmer.stem_term(token)
-            #     self.text_tokens[idx] = token
-
-            # token = self.take_emoji_off(token) #this one is faster
-            # self.text_tokens[idx] = token
 
             if token.lower() in self.stop_words_dict or (len(token) == 1 and ord(token) > 126):
                 continue
@@ -73,7 +66,8 @@ class Parse:
                 if entity_chunk != '':
                     named_entities.add(entity_chunk[:-1])
                     if empty_chunk > 1:
-                        ne_words.add(entity_chunk)
+                        # ne_words.add(entity_chunk)
+                        tokenized_list.append(entity_chunk[:-1].lower())
                     entity_chunk = ''
                     empty_chunk = 0
 
@@ -103,8 +97,8 @@ class Parse:
                 self.append_to_tokenized(tokenized_list, capital_letter_indexer, token)
 
         # appends named entities to the tokenized list
-        for word in ne_words:
-            tokenized_list.append(word[:-1].lower())
+        # for word in ne_words:
+        #     tokenized_list.append(word[:-1].lower())
         return tokenized_list, capital_letter_indexer, named_entities
 
     def parse_doc(self, doc_as_list):
@@ -114,7 +108,7 @@ class Parse:
         :return: Document object with corresponding fields.
         """
         if len(doc_as_list) > 0:
-            tweet_id = doc_as_list[0]
+            tweet_id = int(doc_as_list[0])
         else:
             tweet_id = None
         if len(doc_as_list) > 1:
@@ -150,10 +144,6 @@ class Parse:
         dict_list = [url, retweet_url, quote_url, retweet_quoted_url]
         max_tf = 0
 
-
-
-        # if tweet_id == '123456789':
-        #     print()
         urls_set = set()
         try:
             # holds all URLs in one place
@@ -172,9 +162,14 @@ class Parse:
             full_text = self.clean_text_from_urls(full_text)
 
         full_text = re.sub(self.take_off_non_latin, u'', full_text)
+        if len(full_text) == 0:
+            return None
 
         tokenized_text, capital_letter_indexer, named_entities = self.parse_sentence(full_text)
-        tokenized_text.extend([x.lower() for x in self.handle_dates(tweet_date)])
+
+        if len(tokenized_text) == 0:
+            return None
+        # tokenized_text.extend([x.lower() for x in self.handle_dates(tweet_date)])
         # expends the full text with tokenized urls
         self.expand_tokenized_with_url_set(tokenized_text, urls_set)
         term_dict = {}
@@ -182,14 +177,16 @@ class Parse:
         for idx, term in enumerate(tokenized_text):
             if term not in term_dict.keys():
                 # holding term's locations at current tweet
-                term_dict[term] = [idx]
+                term_dict[term] = 1
 
             else:
-                term_dict[term].append(idx)
-            if len(term_dict[term]) > max_tf:
-                max_tf = len(term_dict[term])
+                term_dict[term] += 1
+            if term_dict[term] > max_tf:
+                max_tf = term_dict[term]
 
-        document = Document(tweet_id, term_dict, doc_length, max_tf, len(term_dict),
+        tweet_date = datetime.strptime(tweet_date, '%a %b %d %X %z %Y')
+
+        document = Document(tweet_id, tweet_date, term_dict, doc_length, max_tf, len(term_dict),
                             capital_letter_indexer, named_entities)
         return document
 
@@ -338,10 +335,10 @@ class Parse:
         if url is not None:
             r = re.split('[/://?=]', url)
             if 'twitter.com' in r or 't.co' in r:
-                return [r[-1]]
+                return []
             if len(r) > 3 and 'www.' in r[3]:
                 r[3] = r[3][4:]
-            return [x.lower() for x in r if (x != '' and x != 'https')]
+            return [x.lower() for x in r if (x != '' and x != 'https' and not x.startswith('#'))]
 
     def expand_tokenized_with_url_set(self, to_extend, urls_set):
         """
@@ -443,11 +440,10 @@ class Parse:
         :return: list of parsed information
         """
         splitted_date = tweet_date.split()
-        day_txt = self.days_dict[splitted_date[0]]
         day_num = splitted_date[2]
         month_txt, month_num = self.months_dict[splitted_date[1]]
         date_num = day_num + "/" + month_num + "/" + splitted_date[5]
-        return [day_txt, month_txt, date_num, splitted_date[3]]
+        return [month_txt, date_num, splitted_date[3]]
 
     def append_to_tokenized(self, tokenized_list, capital_letters, token):
         """
