@@ -10,6 +10,8 @@ class Indexer:
         self.inverted_idx = {}
         self.document_dict = {}
         self.document_posting = {}
+        self.document_posting_covid = {}
+        self.doc_posting_covid_counter = 1
         self.document_posting_counter = 1
         self.locations_at_postings = OrderedDict()
         # posting_list example -> [('banana', [doc1, doc2,..]) ...]
@@ -50,17 +52,27 @@ class Indexer:
         for entity in document_entities:
             self.entities_dict[entity] += 1
         document_vec = np.zeros(shape=25)
+        is_covid = False
         for term in document_dictionary:
+            if term == 'covid':
+                is_covid = True
             if term in self.glove_dict:
                 document_vec += self.glove_dict[term]
         document_vec /= len(document_dictionary)
         # document_vec, # numpy array of size 25 which
         # represents the document in 25 dimensional space(GloVe)
-        self.doc_posting_dict[document.tweet_id] = (document_vec, document_date)
-        self.document_dict[document.tweet_id] = "doc_posting"+str(self.doc_posting_counter)
+        if is_covid:
+            self.document_posting_covid[document.tweet_id] = (document_vec, document_date)
+            self.document_dict[document.tweet_id] = "doc_posting_covid" + str(self.doc_posting_covid_counter)
+        else:
+            self.doc_posting_dict[document.tweet_id] = (document_vec, document_date)
+            self.document_dict[document.tweet_id] = "doc_posting"+str(self.doc_posting_counter)
 
-        if len(self.doc_posting_dict) == 100000: #TODO should check the number
+        if len(self.doc_posting_dict) == 100000:
             self.save_doc_posting()
+        if len(self.document_posting_covid) == 100000:
+            self.save_doc_covid()
+
 
         # Go over each term in the doc
         for term in document_dictionary.keys():
@@ -106,6 +118,7 @@ class Indexer:
     def merge_chunks(self):
         """
         performs a K-way merge on the posting files -> N disk accesses
+        writes new posting files to the disk.
         :return:
         """
         saved_chunks = []
@@ -165,7 +178,7 @@ class Indexer:
 
                 should_enter = self.update_should_enter(saved_chunks, chunks_indices)
 
-                # saving will be here
+                # saving happens as soon as the size reaches given max size of the final posting
                 if self.accumulative_size >= self.max_accumulative:
                     self.merged_dicts.append(str(self.counter_of_postings))
                     utils.save_list(building_list, str(self.counter_of_postings), self.config.get_out_path())
@@ -248,3 +261,9 @@ class Indexer:
         utils.save_dict(self.doc_posting_dict, "doc_posting" + str(self.doc_posting_counter), self.config.get_out_path())
         self.doc_posting_counter += 1
         self.doc_posting_dict = {}
+
+    def save_doc_covid(self):
+        utils.save_dict(self.document_posting_covid, "doc_posting_covid" + str(self.doc_posting_covid_counter),
+                        self.config.get_out_path())
+        self.doc_posting_covid_counter += 1
+        self.document_posting_covid = {}
