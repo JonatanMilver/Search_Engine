@@ -64,7 +64,7 @@ class Searcher:
 
         query_glove_vec /= len(query)
 
-        p = 0.4
+        p = 0.35
         min_num_of_words_to_relevent = int(len(query) * p)
         pre_doc_dict = {}
         pre_doc_dict_counter = Counter()
